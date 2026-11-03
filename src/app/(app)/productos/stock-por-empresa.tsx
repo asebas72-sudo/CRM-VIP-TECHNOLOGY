@@ -38,9 +38,9 @@ export async function StockPorEmpresa({
   const lista = [...filas.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
 
   return (
-    <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">
+    <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-2xl bg-white ring-1 ring-slate-200">
       <table className="w-full text-left text-sm">
-        <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
+        <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 shadow-[inset_0_-1px_0_var(--color-slate-200)]">
           <tr>
             <th className="px-4 py-3 font-medium">Producto</th>
             {empresas.map((e) => (
