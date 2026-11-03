@@ -21,7 +21,8 @@ export function Marco({ menu, barra, children }: { menu: ReactNode; barra: React
     <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row print:block print:bg-white">
       {menu}
       <div className="min-w-0 flex-1">
-        {!ruta.startsWith("/servicio") && barra}
+        {/* Reparaciones e Informes manejan varias empresas a la vez: sin barra de empresa */}
+        {!ruta.startsWith("/servicio") && !ruta.startsWith("/informes") && barra}
         <main className="p-4 md:p-8 print:p-0">{children}</main>
       </div>
     </div>

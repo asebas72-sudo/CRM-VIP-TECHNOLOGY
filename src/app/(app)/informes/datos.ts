@@ -74,6 +74,8 @@ type Venta = {
 
 export type Fila = { etiqueta: string; valor: number; detalle?: string; enlace?: string };
 
+export type Kpi = Informe["kpi"];
+
 export type Informe = {
   periodo: Periodo;
   dias: { dia: string; ventas: number; utilidad: number; numero: number }[];
@@ -96,6 +98,8 @@ export type Informe = {
     agotados: number;
     bajoMinimo: number;
   };
+  /** Los mismos indicadores, empresa por empresa */
+  porEmpresaKpi: (Kpi & { empresaId: string; nombre: string })[];
   porTipo: Fila[];
   porFormaPago: Fila[];
   topProductos: Fila[];
@@ -151,7 +155,7 @@ export async function construirInforme(
       .limit(10000),
     supabase
       .from("ventas")
-      .select("total")
+      .select("empresa_id, total")
       .in("empresa_id", ids)
       .eq("estado", "pagada")
       .gte("fecha", inicio(anteriorDesde))
@@ -159,7 +163,7 @@ export async function construirInforme(
       .limit(10000),
     supabase
       .from("pagos")
-      .select("valor, ventas!inner (estado)")
+      .select("empresa_id, valor, ventas!inner (estado)")
       .in("empresa_id", ids)
       .eq("ventas.estado", "pagada")
       .gte("fecha", inicio(periodo.desde))
@@ -167,7 +171,7 @@ export async function construirInforme(
       .limit(20000),
     supabase
       .from("compras")
-      .select("total, proveedores (nombre)")
+      .select("empresa_id, total, proveedores (nombre)")
       .in("empresa_id", ids)
       .gte("fecha", periodo.desde)
       .lte("fecha", periodo.hasta)
@@ -180,7 +184,7 @@ export async function construirInforme(
       .limit(20000),
     supabase
       .from("ventas")
-      .select("id, consecutivo, saldo, fecha_vencimiento, clientes (nombre)")
+      .select("id, empresa_id, consecutivo, saldo, fecha_vencimiento, clientes (nombre)")
       .in("empresa_id", ids)
       .eq("estado", "pagada")
       .gt("saldo", 0)
@@ -194,11 +198,6 @@ export async function construirInforme(
   const ventas = (ventasRes.data ?? []) as unknown as Venta[];
   const items = ventas.flatMap((v) => v.venta_items.map((i) => ({ ...i, empresa_id: v.empresa_id })));
   const costoDe = (v: Venta) => v.venta_items.reduce((s, i) => s + Number(i.cantidad) * Number(i.costo_unitario), 0);
-
-  // --- Indicadores de ventas ---
-  const totalVentas = ventas.reduce((s, v) => s + Number(v.total), 0);
-  const totalSinIva = ventas.reduce((s, v) => s + Number(v.subtotal), 0);
-  const utilidad = totalSinIva - ventas.reduce((s, v) => s + costoDe(v), 0);
 
   // --- Serie diaria (todos los días del periodo, también los de $0) ---
   const porDia = new Map<string, { ventas: number; utilidad: number; numero: number }>();
@@ -235,7 +234,7 @@ export async function construirInforme(
       const p = productoPorId.get(id);
       const item = items.find((i) => i.producto_id === id);
       return {
-        etiqueta: p?.nombre ?? item?.descripcion ?? "Producto",
+        etiqueta: (p?.nombre ?? item?.descripcion ?? "Producto") + (item ? sufijoEmpresa(item.empresa_id) : ""),
         valor,
         detalle: `${vendidoPorProducto.get(id) ?? 0} und.${p ? ` · stock ${p.stock}` : ""}`,
         enlace: p ? `/productos/${p.id}` : undefined,
@@ -244,8 +243,6 @@ export async function construirInforme(
   ).slice(0, 10);
 
   const conStock = productos.filter((p) => Number(p.stock) > 0);
-  const inventarioCosto = conStock.reduce((s, p) => s + Number(p.stock) * Number(p.costo_promedio), 0);
-  const inventarioVenta = conStock.reduce((s, p) => s + Number(p.stock) * Number(p.precio_venta), 0);
 
   const porCategoria = ordenar(
     [...agrupar(conStock, (p) => p.categorias?.nombre ?? "Sin categoría", (p) => Number(p.stock) * Number(p.costo_promedio))].map(
@@ -294,11 +291,11 @@ export async function construirInforme(
     }));
 
   // --- Cartera ---
-  type Cartera = { id: string; consecutivo: number; saldo: number; fecha_vencimiento: string | null; clientes: { nombre: string } | null };
+  type Cartera = { id: string; empresa_id: string; consecutivo: number; saldo: number; fecha_vencimiento: string | null; clientes: { nombre: string } | null };
   const cartera = (carteraRes.data ?? []) as unknown as Cartera[];
   const vencidas = cartera.filter((c) => c.fecha_vencimiento && c.fecha_vencimiento < hoy);
   const carteraVencida = ordenar(
-    [...agrupar(vencidas, (c) => c.clientes?.nombre ?? "Sin cliente", (c) => Number(c.saldo))].map(([etiqueta, valor]) => ({
+    [...agrupar(vencidas, (c) => (c.clientes?.nombre ?? "Sin cliente") + sufijoEmpresa(c.empresa_id), (c) => Number(c.saldo))].map(([etiqueta, valor]) => ({
       etiqueta,
       valor,
       enlace: "/cartera",
@@ -306,7 +303,7 @@ export async function construirInforme(
   ).slice(0, 10);
 
   // --- Compras ---
-  type Compra = { total: number; proveedores: { nombre: string } | null };
+  type Compra = { empresa_id: string; total: number; proveedores: { nombre: string } | null };
   const compras = (comprasRes.data ?? []) as unknown as Compra[];
   const porProveedor = ordenar(
     [...agrupar(compras, (c) => c.proveedores?.nombre ?? "Sin proveedor", (c) => Number(c.total))].map(([etiqueta, valor]) => ({
@@ -322,31 +319,48 @@ export async function construirInforme(
     : { data: [] };
   const nombreVendedor = new Map((perfiles ?? []).map((p) => [p.usuario_id, p.nombre ?? p.correo]));
 
+  const anterior = (anteriorRes.data ?? []) as { empresa_id: string; total: number }[];
+  const pagos = (pagosRes.data ?? []) as unknown as { empresa_id: string; valor: number }[];
+  const suma = <T,>(lista: T[], valor: (x: T) => number) => lista.reduce((t, x) => t + valor(x), 0);
+
+  function kpiDe(incluir: (empresaId: string) => boolean): Kpi {
+    const v = ventas.filter((x) => incluir(x.empresa_id));
+    const sinIva = suma(v, (x) => Number(x.subtotal));
+    const total = suma(v, (x) => Number(x.total));
+    const util = sinIva - suma(v, costoDe);
+    const prods = productos.filter((x) => incluir(x.empresa_id));
+    const enStock = prods.filter((x) => Number(x.stock) > 0);
+    const cart = cartera.filter((x) => incluir(x.empresa_id));
+    const comp = compras.filter((x) => incluir(x.empresa_id));
+    return {
+      ventas: total,
+      ventasAnterior: suma(anterior.filter((x) => incluir(x.empresa_id)), (x) => Number(x.total)),
+      utilidad: util,
+      margen: sinIva > 0 ? (util / sinIva) * 100 : null,
+      numeroVentas: v.length,
+      ticket: v.length ? total / v.length : 0,
+      unidades: suma(v, (x) => suma(x.venta_items, (i) => Number(i.cantidad))),
+      recaudo: suma(pagos.filter((x) => incluir(x.empresa_id)), (x) => Number(x.valor)),
+      compras: suma(comp, (x) => Number(x.total)),
+      numeroCompras: comp.length,
+      inventarioCosto: suma(enStock, (x) => Number(x.stock) * Number(x.costo_promedio)),
+      inventarioVenta: suma(enStock, (x) => Number(x.stock) * Number(x.precio_venta)),
+      unidadesStock: suma(enStock, (x) => Number(x.stock)),
+      cartera: suma(cart, (x) => Number(x.saldo)),
+      carteraVencida: suma(cart.filter((c) => c.fecha_vencimiento && c.fecha_vencimiento < hoy), (x) => Number(x.saldo)),
+      agotados: prods.filter((x) => Number(x.stock) <= 0).length,
+      bajoMinimo: prods.filter((x) => Number(x.stock) > 0 && Number(x.stock_minimo) > 0 && Number(x.stock) <= Number(x.stock_minimo)).length,
+    };
+  }
+
   const filas = (m: Map<string, number>, nombre: (k: string) => string) =>
     ordenar([...m].map(([k, valor]) => ({ etiqueta: nombre(k), valor })));
 
   return {
     periodo,
     dias: [...porDia].map(([dia, d]) => ({ dia, ...d })),
-    kpi: {
-      ventas: totalVentas,
-      ventasAnterior: (anteriorRes.data ?? []).reduce((s, v) => s + Number(v.total), 0),
-      utilidad,
-      margen: totalSinIva > 0 ? (utilidad / totalSinIva) * 100 : null,
-      numeroVentas: ventas.length,
-      ticket: ventas.length ? totalVentas / ventas.length : 0,
-      unidades: items.reduce((s, i) => s + Number(i.cantidad), 0),
-      recaudo: (pagosRes.data ?? []).reduce((s, p) => s + Number(p.valor), 0),
-      compras: compras.reduce((s, c) => s + Number(c.total), 0),
-      numeroCompras: compras.length,
-      inventarioCosto,
-      inventarioVenta,
-      unidadesStock: conStock.reduce((s, p) => s + Number(p.stock), 0),
-      cartera: cartera.reduce((s, c) => s + Number(c.saldo), 0),
-      carteraVencida: vencidas.reduce((s, c) => s + Number(c.saldo), 0),
-      agotados: productos.filter((p) => Number(p.stock) <= 0).length,
-      bajoMinimo: productos.filter((p) => Number(p.stock) > 0 && Number(p.stock_minimo) > 0 && Number(p.stock) <= Number(p.stock_minimo)).length,
-    },
+    kpi: kpiDe(() => true),
+    porEmpresaKpi: empresas.map((e) => ({ ...kpiDe((id) => id === e.id), empresaId: e.id, nombre: e.nombre })),
     porTipo: filas(agrupar(ventas, (v) => v.tipo, (v) => Number(v.total)), (k) => TIPO[k] ?? k),
     porFormaPago: filas(
       agrupar(ventas.filter((v) => v.tipo === "contado"), (v) => v.forma_pago, (v) => Number(v.total)),
