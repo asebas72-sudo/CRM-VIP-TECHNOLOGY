@@ -73,12 +73,27 @@ export function construirCodigo(cedula: string, nombre: string, marca: string, f
   return `${p("day")}${nom.slice(0, 2)}${ced.slice(0, 2)}${nom.slice(2, 4)}${ced.slice(-2)}${mar}${p("hour")}${p("minute")}${p("second")}`;
 }
 
+// Emojis y símbolos gráficos (incluye uniones y selectores de variación)
+const SIMBOLO = "[\\u{1F000}-\\u{1FAFF}\\u{2600}-\\u{27BF}\\u{2B00}-\\u{2BFF}\\u{200D}\\u{FE0F}\\u{10000}-\\u{10FFFF}]";
+const SIMBOLO_INICIAL = new RegExp(`^([ \\t]*)${SIMBOLO}+[ \\t]*`, "gmu");
+const SIMBOLO_SUELTO = new RegExp(`[ \\t]*${SIMBOLO}+`, "gu");
+
+/**
+ * Quita emojis y símbolos especiales: al abrir WhatsApp desde un enlace, en
+ * algunos equipos llegan como "�". Un símbolo al inicio de línea se vuelve
+ * viñeta "- ". Se conservan letras, tildes, ñ y signos de puntuación.
+ */
+export function limpiarParaWhatsapp(texto: string): string {
+  return texto.replace(SIMBOLO_INICIAL, "$1- ").replace(SIMBOLO_SUELTO, "");
+}
+
 /** Enlace de WhatsApp (agrega el 57 de Colombia a números de 10 dígitos). */
 export function enlaceWhatsapp(celular: string | null | undefined, texto = ""): string | null {
   let digitos = String(celular ?? "").replace(/\D/g, "");
   if (!digitos) return null;
   if (digitos.length === 10) digitos = `57${digitos}`;
-  return `https://wa.me/${digitos}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
+  const limpio = limpiarParaWhatsapp(texto);
+  return `https://wa.me/${digitos}${limpio ? `?text=${encodeURIComponent(limpio)}` : ""}`;
 }
 
 // ---------------------------------------------------------------------
@@ -105,12 +120,12 @@ export type Plantillas = Record<ClavePlantilla, string>;
 
 export const PLANTILLAS_DEFECTO: Plantillas = {
   ORDEN_INGRESADO: [
-    "Hola {cliente} 👋",
+    "Hola {cliente},",
     "Tu equipo *{equipo}* fue registrado en *{empresa}*.",
     "",
-    "🧾 Código de caso: *{codigo}*",
-    "📅 Fecha de ingreso: {fecha_ingreso}",
-    "📆 Entrega estimada: {fecha_entrega}",
+    "- Código de caso: *{codigo}*",
+    "- Fecha de ingreso: {fecha_ingreso}",
+    "- Entrega estimada: {fecha_entrega}",
     "",
     "Pronto uno de nuestros técnicos se comunicará contigo.",
     "",
@@ -130,7 +145,7 @@ export const PLANTILLAS_DEFECTO: Plantillas = {
     "Hola {cliente}, le escribimos de {empresa}.",
     "",
     "Estamos trabajando en su equipo *{equipo}* (ticket {codigo}).",
-    "📝 {informe}",
+    "- {informe}",
     "",
     "Le avisaremos apenas esté listo. ¡Gracias por su confianza!",
   ].join("\n"),
@@ -138,32 +153,32 @@ export const PLANTILLAS_DEFECTO: Plantillas = {
     "Hola {cliente}, le escribimos de {empresa}.",
     "",
     "Su equipo *{equipo}* (ticket {codigo}) está en espera de repuestos.",
-    "📝 {informe}",
-    "💰 Costo estimado de la reparación: {costo}",
+    "- {informe}",
+    "- Costo estimado de la reparación: {costo}",
     "",
     "Le avisaremos cuando lleguen. Cualquier duda, con gusto le atendemos.",
   ].join("\n"),
   ORDEN_REVISADO: [
     "Hola {cliente}, le escribimos de {empresa} con el diagnóstico de su equipo *{equipo}* (ticket {codigo}).",
     "",
-    "🔬 Diagnóstico: {informe}",
-    "💰 Costo de la reparación: {costo}",
+    "- Diagnóstico: {informe}",
+    "- Costo de la reparación: {costo}",
     "",
     "Quedamos al pendiente de su aprobación para continuar; cualquier duda, con gusto le atendemos. ¡Gracias por su confianza!",
   ].join("\n"),
   ORDEN_LISTO: [
-    "Hola {cliente}, le escribimos de {empresa}. ✅",
+    "Hola {cliente}, le escribimos de {empresa}.",
     "",
     "Su equipo *{equipo}* (ticket {codigo}) ya está disponible para ser recogido.",
-    "💰 Valor a pagar: {costo}",
-    "📝 {informe}",
+    "- Valor a pagar: {costo}",
+    "- {informe}",
     "",
     "Puede pasar por él preferiblemente los días LUNES - MIÉRCOLES - VIERNES de 3 de la tarde a 7 de la noche. Agradecemos su retiro dentro de los próximos 15 días hábiles, ya que posterior a esta fecha {empresa} no podrá responder por la custodia del mismo.",
     "",
     "Recuerde presentar el código *{codigo}*. ¡Quedamos atentos a su visita!",
   ].join("\n"),
   ORDEN_ENTREGADO: [
-    "Hola {cliente}, gracias por confiar en {empresa}. 🙌",
+    "Hola {cliente}, gracias por confiar en {empresa}.",
     "",
     "Su equipo *{equipo}* (ticket {codigo}) fue entregado.",
     "",
@@ -172,44 +187,44 @@ export const PLANTILLAS_DEFECTO: Plantillas = {
   ORDEN_ACTUALIZACION: [
     "Hola {cliente}, le escribimos de {empresa} con una actualización sobre su equipo *{equipo}* (ticket {codigo}).",
     "",
-    "📌 Estado: {estado}",
-    "💰 Costo de la reparación: {costo}",
-    "📝 {informe}",
+    "- Estado: {estado}",
+    "- Costo de la reparación: {costo}",
+    "- {informe}",
     "",
     "Cualquier duda, con gusto le atendemos. ¡Gracias por su confianza!",
   ].join("\n"),
   ORDEN_TECNICO: [
     "Hola {tecnico}, tienes asignada la orden *{codigo}* (No. {orden}).",
     "",
-    "💻 Equipo: {equipo}",
-    "👤 Cliente: {cliente}",
-    "⚠️ Falla reportada: {fallas}",
+    "- Equipo: {equipo}",
+    "- Cliente: {cliente}",
+    "- Falla reportada: {fallas}",
   ].join("\n"),
   ASESORIA_PENDIENTE: [
-    "Hola {cliente} 👋",
+    "Hola {cliente},",
     "Tu solicitud de asesoría en *{empresa}* fue registrada.",
     "",
-    "🧾 Asesoría No. *{numero}*",
-    "🛠️ Solicitud: {solicitud}",
+    "- Asesoría No. *{numero}*",
+    "- Solicitud: {solicitud}",
     "",
     "Pronto confirmaremos contigo la fecha y hora de la visita.",
     "¡Gracias por confiar en nosotros!",
   ].join("\n"),
   ASESORIA_CONFIRMADA: [
-    "Hola {cliente} 👋, te escribimos de *{empresa}*.",
+    "Hola {cliente}, te escribimos de *{empresa}*.",
     "",
     "Tu asesoría No. *{numero}* ({solicitud}) quedó confirmada:",
-    "📅 Visita: {fecha_visita}",
-    "👨‍🔧 Técnico: {tecnico}",
+    "- Visita: {fecha_visita}",
+    "- Técnico: {tecnico}",
     "",
     "¡Nos vemos pronto!",
   ].join("\n"),
   ASESORIA_REALIZADA: [
-    "Hola {cliente}, gracias por confiar en {empresa}. 🙌",
+    "Hola {cliente}, gracias por confiar en {empresa}.",
     "",
     "Tu asesoría No. {numero} ({solicitud}) fue realizada.",
-    "📝 {informe}",
-    "💰 Valor: {costo}",
+    "- {informe}",
+    "- Valor: {costo}",
     "",
     "Cualquier inquietud, con gusto te atendemos.",
   ].join("\n"),
@@ -217,18 +232,18 @@ export const PLANTILLAS_DEFECTO: Plantillas = {
     "Hola {cliente}, te escribimos de {empresa}.",
     "",
     "Tu asesoría No. {numero} ({solicitud}) fue cancelada.",
-    "📝 {informe}",
+    "- {informe}",
     "",
     "Si deseas reprogramarla, con gusto te ayudamos.",
   ].join("\n"),
   ASESORIA_TECNICO: [
     "Hola {tecnico}, tienes asignada la asesoría No. {numero}.",
     "",
-    "👤 Cliente: {cliente}",
-    "📱 Celular: {celular}",
-    "🛠️ Solicitud: {solicitud}",
-    "📝 Detalle: {detalle}",
-    "📅 Visita: {fecha_visita}",
+    "- Cliente: {cliente}",
+    "- Celular: {celular}",
+    "- Solicitud: {solicitud}",
+    "- Detalle: {detalle}",
+    "- Visita: {fecha_visita}",
   ].join("\n"),
 };
 
@@ -327,8 +342,8 @@ export function aplicarPlantilla(texto: string, valores: Record<string, string |
     });
     return vacia ? [] : [nueva];
   });
-  // Sin líneas en blanco repetidas al quitar
-  return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  // Sin emojis (ver limpiarParaWhatsapp) ni líneas en blanco repetidas
+  return limpiarParaWhatsapp(lineas.join("\n")).replace(/\n{3,}/g, "\n\n").trim();
 }
 
 export const pesosCO = (n: number | null | undefined) => (n == null ? null : `$${Math.round(n).toLocaleString("es-CO")}`);

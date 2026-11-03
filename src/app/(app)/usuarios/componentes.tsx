@@ -129,12 +129,12 @@ function AvisoCredenciales({
   const sitio = typeof window === "undefined" ? "" : window.location.origin;
   const texto = credenciales
     ? [
-        `Hola ${credenciales.nombre} 👋`,
-        "Estos son tus datos para entrar al sistema:",
+        `Hola ${credenciales.nombre},`,
+        "estos son tus datos para entrar al sistema CRM VIP TECHNOLOGY:",
         "",
-        `🌐 ${sitio}`,
-        `📧 Usuario: ${credenciales.correo}`,
-        `🔑 Contraseña temporal: ${credenciales.clave}`,
+        `- Página: ${sitio}`,
+        `- Usuario: ${credenciales.correo}`,
+        `- Contraseña temporal: ${credenciales.clave}`,
         "",
         "La primera vez que entres te pedirá crear tu propia contraseña.",
       ].join("\n")
