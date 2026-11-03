@@ -1,5 +1,6 @@
 "use server";
 
+import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { COOKIE_EMPRESA } from "@/lib/empresa";
@@ -18,6 +19,18 @@ export async function crearEmpresa(_: EstadoEmpresa, form: FormData): Promise<Es
 
   (await cookies()).set(COOKIE_EMPRESA, data as string, { path: "/", sameSite: "lax" });
   redirect("/");
+}
+
+export async function actualizarEmpresa(form: FormData) {
+  const id = String(form.get("id") ?? "");
+  const nombre = String(form.get("nombre") ?? "").trim();
+  const nit = String(form.get("nit") ?? "").trim() || null;
+  if (!nombre) throw new Error("El nombre de la empresa es obligatorio.");
+
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.from("empresas").update({ nombre, nit }).eq("id", id);
+  if (error) throw new Error(`No se pudo actualizar la empresa: ${error.message}`);
+  revalidatePath("/", "layout");
 }
 
 export async function cambiarEmpresa(form: FormData) {

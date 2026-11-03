@@ -1,36 +1,79 @@
 "use client";
 
 import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { cantidad, fecha, pesos } from "@/lib/formato";
 import {
   analizarFactura,
   importarCompra,
+  verCompra,
   type EdicionLinea,
+  type EmpresaResumen,
   type EstadoAnalisis,
+  type ResultadoImportacion,
   type VistaPrevia,
 } from "./acciones";
 
 const campo =
   "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20";
 
-export function Importador() {
+type Props = { empresas: EmpresaResumen[]; empresaInicial: string };
+
+/** Envoltura que permite empezar de cero ("Importar otra factura"). */
+export function Importador(props: Props) {
+  const [intento, setIntento] = useState(0);
+  return <FormularioImportacion key={intento} {...props} alReiniciar={() => setIntento((n) => n + 1)} />;
+}
+
+function FormularioImportacion({ empresas, empresaInicial, alReiniciar }: Props & { alReiniciar: () => void }) {
   const [estado, analizar, analizando] = useActionState<EstadoAnalisis, FormData>(analizarFactura, {});
-  const formRef = useRef<HTMLFormElement>(null);
   const [, iniciarAnalisis] = useTransition();
+  const [empresaId, setEmpresaId] = useState(empresaInicial);
+  const [errorCerrado, setErrorCerrado] = useState<EstadoAnalisis | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  // onSubmit en vez de action: así React no limpia los archivos elegidos,
+  // que se vuelven a enviar al confirmar la importación.
+  function leer(empresa: string) {
+    const form = formRef.current;
+    if (!form) return;
+    const datos = new FormData(form);
+    datos.set("empresa_id", empresa);
+    iniciarAnalisis(() => analizar(datos));
+  }
+
+  function cambiarEmpresa(id: string) {
+    setEmpresaId(id);
+    // Si ya se leyó la factura, se vuelve a analizar contra el inventario de la otra empresa
+    if (estado.vista) leer(id);
+  }
 
   return (
     <div className="space-y-6">
       <form
         ref={formRef}
-        // onSubmit en vez de action: así React no limpia los archivos
-        // elegidos, que se vuelven a enviar al confirmar la importación.
         onSubmit={(e) => {
           e.preventDefault();
-          const datos = new FormData(e.currentTarget);
-          iniciarAnalisis(() => analizar(datos));
+          leer(empresaId);
         }}
-        className="grid gap-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:grid-cols-[1fr_1fr_auto] sm:items-end"
+        className="grid gap-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200 lg:grid-cols-[1fr_1fr_1fr_auto] lg:items-end"
       >
+        <label className="block text-sm font-medium text-slate-700">
+          Cargar a la empresa
+          <select
+            name="empresa_id"
+            value={empresaId}
+            onChange={(e) => cambiarEmpresa(e.target.value)}
+            className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-slate-900"
+          >
+            {empresas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+                {e.nit ? ` · NIT ${e.nit}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="block text-sm font-medium text-slate-700">
           Factura XML (obligatorio)
           <input
@@ -50,21 +93,34 @@ export function Importador() {
             className="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5"
           />
         </label>
-        <button
-          disabled={analizando}
-          className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-        >
+        <button disabled={analizando} className={`${botonPrimario} py-2.5`}>
           {analizando ? "Leyendo..." : "Leer factura"}
         </button>
       </form>
 
-      {estado.error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{estado.error}</p>}
+      <Dialogo
+        abierto={Boolean(estado.error) && errorCerrado !== estado}
+        tono="error"
+        titulo="No se pudo leer la factura"
+        alCerrar={() => setErrorCerrado(estado)}
+        acciones={
+          <button className={botonPrimario} onClick={() => setErrorCerrado(estado)}>
+            Entendido
+          </button>
+        }
+      >
+        <p>{estado.error}</p>
+      </Dialogo>
+
       {estado.vista && (
-        // key: al leer otra factura se reinician las ediciones
+        // key: al leer otra factura o cambiar de empresa se reinician las ediciones
         <VistaPreviaCompra
-          key={`${estado.vista.factura.proveedor.nit}-${estado.vista.factura.numero}`}
+          key={`${estado.vista.empresa.id}-${estado.vista.factura.proveedor.nit}-${estado.vista.factura.numero}`}
           vista={estado.vista}
           formulario={formRef}
+          analizando={analizando}
+          alUsarSugerida={(id) => cambiarEmpresa(id)}
+          alReiniciar={alReiniciar}
         />
       )}
     </div>
@@ -74,11 +130,17 @@ export function Importador() {
 function VistaPreviaCompra({
   vista,
   formulario,
+  analizando,
+  alUsarSugerida,
+  alReiniciar,
 }: {
   vista: VistaPrevia;
   formulario: React.RefObject<HTMLFormElement | null>;
+  analizando: boolean;
+  alUsarSugerida: (empresaId: string) => void;
+  alReiniciar: () => void;
 }) {
-  const { factura, lineas, catalogo } = vista;
+  const { factura, lineas, catalogo, empresa } = vista;
   const porCodigo = useMemo(() => new Map(catalogo.map((p) => [p.codigo, p])), [catalogo]);
   const [ediciones, setEdiciones] = useState<EdicionLinea[]>(() =>
     lineas.map((l) => ({
@@ -87,41 +149,85 @@ function VistaPreviaCompra({
       manejaSerial: l.seriales.length > 0,
     })),
   );
-  const [error, setError] = useState<string>();
+  const [confirmando, setConfirmando] = useState(false);
+  const [resultado, setResultado] = useState<ResultadoImportacion | null>(null);
   const [importando, iniciar] = useTransition();
+  const [abriendo, iniciarApertura] = useTransition();
 
   const editar = (i: number, cambio: Partial<EdicionLinea>) =>
     setEdiciones((actual) => actual.map((e, j) => (j === i ? { ...e, ...cambio } : e)));
 
   // Códigos nuevos repetidos dentro de la misma factura se crean una sola vez
-  const nuevos = new Set(ediciones.filter((e) => e.codigo && !porCodigo.has(e.codigo.trim())).map((e) => e.codigo.trim()));
+  const nuevos = new Set(
+    ediciones.filter((e) => e.codigo.trim() && !porCodigo.has(e.codigo.trim())).map((e) => e.codigo.trim()),
+  );
   const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
   const seriales = lineas.reduce((s, l, i) => s + (ediciones[i].manejaSerial ? l.seriales.length : 0), 0);
+  const sinCodigo = ediciones.some((e) => !e.codigo.trim());
 
   function importar() {
     const form = formulario.current;
     if (!form) return;
-    setError(undefined);
     const datos = new FormData(form);
+    datos.set("empresa_id", empresa.id);
     datos.set("ediciones", JSON.stringify(ediciones));
     iniciar(async () => {
-      const resultado = await importarCompra(datos);
-      if (resultado?.error) setError(resultado.error);
+      const r = await importarCompra(datos);
+      setConfirmando(false);
+      setResultado(r);
     });
   }
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${analizando ? "pointer-events-none opacity-60" : ""}`}>
+      <div className="rounded-2xl bg-slate-900 px-5 py-4 text-white">
+        <p className="text-xs uppercase tracking-wide text-slate-400">Esta compra se cargará a</p>
+        <p className="text-xl font-bold">{empresa.nombre}</p>
+        {empresa.nit && <p className="text-sm text-slate-400">NIT {empresa.nit}</p>}
+      </div>
+
+      {vista.coincideNit === false && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+          <p>
+            La factura está a nombre de <strong>{factura.cliente.nombre}</strong> (NIT {factura.cliente.nit}),
+            que no coincide con el NIT de {empresa.nombre}.
+          </p>
+          {vista.sugerida && (
+            <button className={botonSecundario} onClick={() => alUsarSugerida(vista.sugerida!.id)}>
+              Cargar a {vista.sugerida.nombre}
+            </button>
+          )}
+        </div>
+      )}
+      {vista.coincideNit === null && vista.sugerida && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+          <p>
+            El comprador de la factura (NIT {factura.cliente.nit}) corresponde a <strong>{vista.sugerida.nombre}</strong>.
+          </p>
+          <button className={botonSecundario} onClick={() => alUsarSugerida(vista.sugerida!.id)}>
+            Cargar a {vista.sugerida.nombre}
+          </button>
+        </div>
+      )}
+
       <div className="grid gap-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:grid-cols-4">
-        <Dato titulo="Proveedor" valor={factura.proveedor.nombre} detalle={`NIT ${factura.proveedor.nit}${vista.proveedorNuevo ? " · nuevo" : ""}`} />
+        <Dato
+          titulo="Proveedor"
+          valor={factura.proveedor.nombre}
+          detalle={`NIT ${factura.proveedor.nit}${vista.proveedorNuevo ? " · nuevo" : ""}`}
+        />
         <Dato titulo="Factura" valor={factura.numero} detalle={fecha(factura.fecha)} />
         <Dato titulo="Unidades" valor={cantidad(unidades)} detalle={`${lineas.length} líneas · ${seriales} seriales`} />
-        <Dato titulo="Total" valor={pesos(factura.total)} detalle={`Subtotal ${pesos(factura.subtotal)} + IVA ${pesos(factura.iva)}`} />
+        <Dato
+          titulo="Total"
+          valor={pesos(factura.total)}
+          detalle={`Subtotal ${pesos(factura.subtotal)} + IVA ${pesos(factura.iva)}`}
+        />
       </div>
 
       {vista.duplicada && (
-        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800">
-          Esta factura ya fue importada. No se puede cargar dos veces.
+        <p className="rounded-lg bg-amber-50 p-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          Esta factura ya fue importada en {empresa.nombre}. No se puede cargar dos veces.
         </p>
       )}
 
@@ -213,14 +319,80 @@ function VistaPreviaCompra({
           Escriba el código de un producto existente para sumarle el stock.
         </p>
         <button
-          onClick={importar}
-          disabled={importando || vista.duplicada}
-          className="rounded-lg bg-green-600 px-5 py-2.5 font-semibold text-white hover:bg-green-700 disabled:opacity-60"
+          onClick={() => setConfirmando(true)}
+          disabled={vista.duplicada || sinCodigo}
+          className={`${botonExito} px-5 py-2.5`}
         >
-          {importando ? "Importando..." : "Importar compra al inventario"}
+          Importar compra al inventario
         </button>
       </div>
-      {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-700">{error}</p>}
+
+      {/* Confirmación antes de importar */}
+      <Dialogo
+        abierto={confirmando}
+        tono={vista.coincideNit === false ? "advertencia" : "info"}
+        titulo="¿Confirmar importación?"
+        alCerrar={importando ? undefined : () => setConfirmando(false)}
+        acciones={
+          <>
+            <button className={botonSecundario} onClick={() => setConfirmando(false)} disabled={importando}>
+              Cancelar
+            </button>
+            <button className={botonExito} onClick={importar} disabled={importando}>
+              {importando ? "Importando..." : "Sí, importar"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          Factura <strong>{factura.numero}</strong> de {factura.proveedor.nombre} por{" "}
+          <strong>{pesos(factura.total)}</strong>.
+        </p>
+        <p>
+          Se cargarán {cantidad(unidades)} unidades ({nuevos.size} producto(s) nuevo(s)) al inventario de:
+        </p>
+        <p className="rounded-lg bg-slate-100 px-3 py-2 text-base font-bold text-slate-900">{empresa.nombre}</p>
+        {vista.coincideNit === false && (
+          <p className="text-amber-700">Atención: el NIT del comprador de la factura no coincide con esta empresa.</p>
+        )}
+      </Dialogo>
+
+      {/* Resultado */}
+      <Dialogo
+        abierto={resultado !== null}
+        tono={resultado?.ok ? "exito" : "error"}
+        titulo={resultado?.ok ? "Compra importada correctamente" : "No se pudo importar la compra"}
+        alCerrar={resultado?.ok ? undefined : () => setResultado(null)}
+        acciones={
+          resultado?.ok ? (
+            <>
+              <button className={botonSecundario} onClick={alReiniciar}>
+                Importar otra factura
+              </button>
+              <button
+                className={botonPrimario}
+                disabled={abriendo}
+                onClick={() => iniciarApertura(() => verCompra(resultado.empresaId, resultado.compraId))}
+              >
+                {abriendo ? "Abriendo..." : "Ver compra"}
+              </button>
+            </>
+          ) : (
+            <button className={botonPrimario} onClick={() => setResultado(null)}>
+              Entendido
+            </button>
+          )
+        }
+      >
+        {resultado?.ok ? (
+          <p>
+            La factura <strong>{resultado.numero}</strong> quedó registrada en <strong>{resultado.empresa}</strong> y
+            sus {cantidad(unidades)} unidades ya están en el inventario.
+          </p>
+        ) : (
+          <p>{resultado?.error}</p>
+        )}
+      </Dialogo>
     </div>
   );
 }

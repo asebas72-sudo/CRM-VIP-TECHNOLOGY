@@ -1,7 +1,8 @@
 "use server";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { exigirRol } from "@/lib/empresa";
+import { COOKIE_EMPRESA, sesionActual, type EmpresaDelUsuario } from "@/lib/empresa";
 import { leerFacturaDian, type FacturaDian } from "@/lib/facturas/dian";
 import { crearClienteServidor } from "@/lib/supabase/server";
 
@@ -14,9 +15,17 @@ export type LineaVistaPrevia = FacturaDian["lineas"][number] & {
   origen: "proveedor" | "codigo" | null;
 };
 
+export type EmpresaResumen = { id: string; nombre: string; nit: string | null };
+
 export type VistaPrevia = {
   factura: Omit<FacturaDian, "lineas">;
   lineas: LineaVistaPrevia[];
+  /** Empresa a la que se va a cargar la compra */
+  empresa: EmpresaResumen;
+  /** true/false si la empresa tiene NIT y coincide (o no) con el comprador de la factura */
+  coincideNit: boolean | null;
+  /** Otra empresa del usuario cuyo NIT sí coincide con el comprador */
+  sugerida: EmpresaResumen | null;
   proveedorNuevo: boolean;
   duplicada: boolean;
   catalogo: ProductoCatalogo[];
@@ -25,6 +34,34 @@ export type VistaPrevia = {
 export type EstadoAnalisis = { error?: string; vista?: VistaPrevia };
 
 export type EdicionLinea = { codigo: string; nombre: string; manejaSerial: boolean };
+
+export type ResultadoImportacion =
+  | { ok: true; compraId: string; empresaId: string; empresa: string; numero: string }
+  | { ok: false; error: string };
+
+/** Solo dígitos del NIT, sin dígito de verificación: "901.476.410-1" → "901476410" */
+function normalizarNit(nit: string | null | undefined): string {
+  return (nit ?? "").split("-")[0].replace(/\D/g, "");
+}
+
+function mismoNit(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = normalizarNit(a);
+  const y = normalizarNit(b);
+  return x !== "" && y !== "" && (x === y || x.slice(0, -1) === y || y.slice(0, -1) === x);
+}
+
+/** Empresas donde el usuario puede cargar compras (admin o bodega). */
+async function empresasConPermiso(): Promise<EmpresaDelUsuario[]> {
+  const { todas } = await sesionActual();
+  return todas.filter((e) => e.rol === "admin" || e.rol === "bodega");
+}
+
+async function empresaDestino(form: FormData): Promise<EmpresaDelUsuario> {
+  const id = String(form.get("empresa_id") ?? "");
+  const empresa = (await empresasConPermiso()).find((e) => e.id === id);
+  if (!empresa) throw new Error("Seleccione una empresa en la que tenga permiso para cargar compras.");
+  return empresa;
+}
 
 async function leerArchivoXml(form: FormData): Promise<{ xml: string; archivo: File }> {
   const archivo = form.get("xml");
@@ -39,10 +76,10 @@ async function leerArchivoXml(form: FormData): Promise<{ xml: string; archivo: F
 
 /** Lee el XML y arma la vista previa: qué productos ya existen y cuáles son nuevos. */
 export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promise<EstadoAnalisis> {
-  const { activa } = await exigirRol("admin", "bodega");
-
   let factura: FacturaDian;
+  let empresa: EmpresaDelUsuario;
   try {
+    empresa = await empresaDestino(form);
     factura = leerFacturaDian((await leerArchivoXml(form)).xml);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "No se pudo leer el XML." };
@@ -53,13 +90,13 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
     supabase
       .from("proveedores")
       .select("id")
-      .eq("empresa_id", activa.id)
+      .eq("empresa_id", empresa.id)
       .eq("nit", factura.proveedor.nit)
       .maybeSingle(),
     supabase
       .from("productos")
       .select("id, codigo, nombre, stock")
-      .eq("empresa_id", activa.id)
+      .eq("empresa_id", empresa.id)
       .order("nombre"),
   ]);
 
@@ -74,12 +111,12 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
       supabase
         .from("producto_proveedor")
         .select("codigo_proveedor, producto_id")
-        .eq("empresa_id", activa.id)
+        .eq("empresa_id", empresa.id)
         .eq("proveedor_id", proveedorRes.data.id),
       supabase
         .from("compras")
         .select("id")
-        .eq("empresa_id", activa.id)
+        .eq("empresa_id", empresa.id)
         .eq("proveedor_id", proveedorRes.data.id)
         .eq("numero_factura", factura.numero)
         .maybeSingle(),
@@ -97,6 +134,11 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
     return { ...linea, codigoSugerido: linea.codigoProveedor || `L${linea.linea}`, origen: null };
   });
 
+  const coincideNit = normalizarNit(empresa.nit) ? mismoNit(empresa.nit, factura.cliente.nit) : null;
+  const sugerida = coincideNit
+    ? null
+    : ((await empresasConPermiso()).find((e) => e.id !== empresa.id && mismoNit(e.nit, factura.cliente.nit)) ?? null);
+
   const encabezado: VistaPrevia["factura"] = {
     numero: factura.numero,
     cufe: factura.cufe,
@@ -107,57 +149,64 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
     iva: factura.iva,
     total: factura.total,
   };
+  const resumen = (e: EmpresaDelUsuario): EmpresaResumen => ({ id: e.id, nombre: e.nombre, nit: e.nit });
+
   return {
-    vista: { factura: encabezado, lineas, proveedorNuevo: !proveedorRes.data, duplicada, catalogo },
+    vista: {
+      factura: encabezado,
+      lineas,
+      empresa: resumen(empresa),
+      coincideNit,
+      sugerida: sugerida && resumen(sugerida),
+      proveedorNuevo: !proveedorRes.data,
+      duplicada,
+      catalogo,
+    },
   };
 }
 
 /**
  * Importa la compra. Vuelve a leer el XML en el servidor (las cantidades y
  * costos nunca se toman del navegador); del formulario solo se usan las
- * decisiones del usuario: código, nombre y si maneja serial.
+ * decisiones del usuario: empresa, código, nombre y si maneja serial.
  */
-export async function importarCompra(form: FormData): Promise<{ error?: string }> {
-  const { activa } = await exigirRol("admin", "bodega");
-
+export async function importarCompra(form: FormData): Promise<ResultadoImportacion> {
   let factura: FacturaDian;
   let archivoXml: File;
+  let empresa: EmpresaDelUsuario;
   try {
+    empresa = await empresaDestino(form);
     const leido = await leerArchivoXml(form);
     archivoXml = leido.archivo;
     factura = leerFacturaDian(leido.xml);
   } catch (e) {
-    return { error: e instanceof Error ? e.message : "No se pudo leer el XML." };
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo leer el XML." };
   }
 
   const ediciones = JSON.parse(String(form.get("ediciones") ?? "[]")) as EdicionLinea[];
   if (ediciones.length !== factura.lineas.length) {
-    return { error: "La vista previa no coincide con el archivo. Vuelva a cargarlo." };
+    return { ok: false, error: "La vista previa no coincide con el archivo. Vuelva a leer la factura." };
   }
 
-  const lineas = factura.lineas.map((l, i) => {
-    const codigo = ediciones[i].codigo.trim();
-    const nombre = ediciones[i].nombre.trim() || l.descripcion;
-    return {
-      codigo,
-      nombre,
-      marca: l.marca,
-      codigo_proveedor: l.codigoProveedor,
-      descripcion: l.descripcionOriginal,
-      cantidad: l.cantidad,
-      costo_unitario: l.costoUnitario,
-      iva_porcentaje: l.ivaPorcentaje,
-      iva_valor: l.ivaValor,
-      total: l.total,
-      maneja_serial: ediciones[i].manejaSerial,
-      seriales: ediciones[i].manejaSerial ? l.seriales : [],
-    };
-  });
-  if (lineas.some((l) => !l.codigo)) return { error: "Todos los productos deben tener código." };
+  const lineas = factura.lineas.map((l, i) => ({
+    codigo: ediciones[i].codigo.trim(),
+    nombre: ediciones[i].nombre.trim() || l.descripcion,
+    marca: l.marca,
+    codigo_proveedor: l.codigoProveedor,
+    descripcion: l.descripcionOriginal,
+    cantidad: l.cantidad,
+    costo_unitario: l.costoUnitario,
+    iva_porcentaje: l.ivaPorcentaje,
+    iva_valor: l.ivaValor,
+    total: l.total,
+    maneja_serial: ediciones[i].manejaSerial,
+    seriales: ediciones[i].manejaSerial ? l.seriales : [],
+  }));
+  if (lineas.some((l) => !l.codigo)) return { ok: false, error: "Todos los productos deben tener código." };
 
   const supabase = await crearClienteServidor();
   const { data: compraId, error } = await supabase.rpc("importar_compra", {
-    p_empresa: activa.id,
+    p_empresa: empresa.id,
     p_compra: {
       numero: factura.numero,
       cufe: factura.cufe,
@@ -170,10 +219,10 @@ export async function importarCompra(form: FormData): Promise<{ error?: string }
     },
     p_lineas: lineas,
   });
-  if (error) return { error: error.message };
+  if (error) return { ok: false, error: error.message };
 
   // Respaldo del XML y del PDF (si se adjuntó). Si falla, la compra ya quedó registrada.
-  const carpeta = `${activa.id}/${compraId}`;
+  const carpeta = `${empresa.id}/${compraId}`;
   const rutas: { xml_path?: string; pdf_path?: string } = {};
   const subidaXml = await supabase.storage
     .from("compras")
@@ -191,5 +240,12 @@ export async function importarCompra(form: FormData): Promise<{ error?: string }
     await supabase.from("compras").update(rutas).eq("id", compraId);
   }
 
+  return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero: factura.numero };
+}
+
+/** Abre una compra cambiando primero a la empresa donde quedó registrada. */
+export async function verCompra(empresaId: string, compraId: string) {
+  const permitida = (await empresasConPermiso()).some((e) => e.id === empresaId);
+  if (permitida) (await cookies()).set(COOKIE_EMPRESA, empresaId, { path: "/", sameSite: "lax" });
   redirect(`/compras/${compraId}`);
 }

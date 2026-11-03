@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { sesionActual } from "@/lib/empresa";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { actualizarEmpresa } from "../acciones";
 import { CrearEmpresa } from "../crear-empresa";
 
 export default async function PaginaEmpresas() {
@@ -30,8 +31,12 @@ export default async function PaginaEmpresas() {
         <table className="w-full text-left text-sm">
           <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
             <tr>
-              <th className="px-4 py-3 font-medium">Empresa</th>
-              <th className="px-4 py-3 font-medium">NIT</th>
+              <th className="px-4 py-3 font-medium" colSpan={2}>
+                Empresa y NIT
+                <span className="ml-1 font-normal text-slate-400">
+                  (el NIT permite reconocer a qué empresa pertenece cada factura)
+                </span>
+              </th>
               <th className="px-4 py-3 font-medium">Usuarios asignados</th>
               <th className="px-4 py-3 font-medium">Creada</th>
             </tr>
@@ -39,8 +44,28 @@ export default async function PaginaEmpresas() {
           <tbody className="divide-y divide-slate-100">
             {(empresasRes.data ?? []).map((e) => (
               <tr key={e.id}>
-                <td className="px-4 py-3 font-medium text-slate-900">{e.nombre}</td>
-                <td className="px-4 py-3 text-slate-600">{e.nit ?? "—"}</td>
+                <td className="px-4 py-3" colSpan={2}>
+                  <form action={actualizarEmpresa} className="flex flex-wrap items-center gap-2">
+                    <input type="hidden" name="id" value={e.id} />
+                    <input
+                      name="nombre"
+                      defaultValue={e.nombre}
+                      required
+                      aria-label="Nombre de la empresa"
+                      className="min-w-48 flex-1 rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-900"
+                    />
+                    <input
+                      name="nit"
+                      defaultValue={e.nit ?? ""}
+                      placeholder="NIT sin dígito de verificación"
+                      aria-label="NIT"
+                      className="w-56 rounded-md border border-slate-300 px-2 py-1 text-slate-700"
+                    />
+                    <button className="rounded-md bg-slate-900 px-3 py-1 text-xs font-semibold text-white hover:bg-slate-700">
+                      Guardar
+                    </button>
+                  </form>
+                </td>
                 <td className="px-4 py-3 text-slate-600">{usuariosPorEmpresa.get(e.id) ?? 0}</td>
                 <td className="px-4 py-3 text-slate-600">
                   {new Date(e.creado_en).toLocaleDateString("es-CO")}
