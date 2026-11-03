@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { exigirRol } from "@/lib/empresa";
 import { cantidad, fecha, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { EliminarCompra } from "./eliminar";
 
 type Item = {
   id: string;
@@ -64,10 +65,18 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
         <Link href="/compras" className="text-sm text-blue-700 hover:underline">
           ← Compras
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Factura {c.numero_factura}</h1>
-        <p className="text-sm text-slate-500">
-          {c.proveedores.nombre} · NIT {c.proveedores.nit} · {fecha(c.fecha)}
-        </p>
+        <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Factura {c.numero_factura}</h1>
+            <p className="text-sm text-slate-500">
+              {c.proveedores.nombre} · NIT {c.proveedores.nit} · {fecha(c.fecha)}
+            </p>
+            <p className="text-sm text-slate-500">
+              Cargada a <strong className="text-slate-700">{activa.nombre}</strong>
+            </p>
+          </div>
+          {activa.rol === "admin" && <EliminarCompra compraId={id} numero={c.numero_factura} empresa={activa.nombre} />}
+        </div>
         <div className="mt-2 flex gap-3">
           {archivos.map(
             (a) =>
