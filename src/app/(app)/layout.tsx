@@ -10,6 +10,7 @@ const MENU: { href: string; texto: string; roles: Rol[] }[] = [
   { href: "/productos", texto: "Productos", roles: ["admin", "bodega", "vendedor"] },
   { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
   { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
+  { href: "/informes", texto: "Informes", roles: ["admin"] },
   { href: "/usuarios", texto: "Usuarios", roles: ["admin"] },
   { href: "/configuracion", texto: "Configuración", roles: ["admin"] },
 ];
