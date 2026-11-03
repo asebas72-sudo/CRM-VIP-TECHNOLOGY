@@ -1,7 +1,7 @@
 import { exigirRol, type Perfil } from "@/lib/empresa";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { cambiarAccesoTotal, cambiarActivo } from "./acciones";
-import { FormularioAgregar, SelectorRol } from "./componentes";
+import { CampoCelular, FormularioAgregar, SelectorRol } from "./componentes";
 
 export default async function PaginaUsuarios() {
   const { perfil: yo, todas } = await exigirRol("admin");
@@ -9,7 +9,7 @@ export default async function PaginaUsuarios() {
   const supabase = await crearClienteServidor();
 
   const [perfilesRes, miembrosRes] = await Promise.all([
-    supabase.from("perfiles").select("usuario_id, nombre, correo, acceso_total, activo").order("nombre"),
+    supabase.from("perfiles").select("usuario_id, nombre, correo, acceso_total, activo, celular").order("nombre"),
     supabase
       .from("miembros_empresa")
       .select("usuario_id, empresa_id, rol")
@@ -17,7 +17,7 @@ export default async function PaginaUsuarios() {
   ]);
   if (perfilesRes.error) throw new Error(perfilesRes.error.message);
 
-  const perfiles = (perfilesRes.data ?? []) as Perfil[];
+  const perfiles = (perfilesRes.data ?? []) as (Perfil & { celular: string | null })[];
   const rolDe = new Map(
     (miembrosRes.data ?? []).map((m) => [`${m.usuario_id}:${m.empresa_id}`, m.rol as string]),
   );
@@ -58,6 +58,7 @@ export default async function PaginaUsuarios() {
                       {p.nombre ?? "—"} {soyYo && <span className="text-xs text-slate-400">(usted)</span>}
                     </p>
                     <p className="text-slate-500">{p.correo}</p>
+                    <CampoCelular usuarioId={p.usuario_id} celular={p.celular} />
                   </td>
                   {yo.acceso_total && (
                     <td className="px-4 py-3">

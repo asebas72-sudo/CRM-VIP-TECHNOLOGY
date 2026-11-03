@@ -4,12 +4,13 @@ import { crearClienteServidor } from "@/lib/supabase/server";
 
 export const COOKIE_EMPRESA = "empresa_activa";
 
-export type Rol = "admin" | "bodega" | "vendedor";
+export type Rol = "admin" | "bodega" | "vendedor" | "tecnico";
 
 export const NOMBRE_ROL: Record<Rol, string> = {
   admin: "Administrador",
   bodega: "Bodega",
   vendedor: "Vendedor",
+  tecnico: "Técnico",
 };
 
 export type EmpresaDelUsuario = {
@@ -66,6 +67,16 @@ export async function sesionActual(): Promise<Sesion> {
   const activa = todas.find((e) => e.id === elegida) ?? todas[0] ?? null;
   return { perfil, activa, todas };
 }
+
+export type Modulo = "ventas" | "servicio";
+
+/** Módulos a los que entra cada rol */
+export const MODULOS_POR_ROL: Record<Rol, Modulo[]> = {
+  admin: ["ventas", "servicio"],
+  vendedor: ["ventas", "servicio"],
+  bodega: ["ventas"],
+  tecnico: ["servicio"],
+};
 
 /** Exige uno de los roles indicados en la empresa activa; si no, vuelve al inicio. */
 export async function exigirRol(...permitidos: Rol[]): Promise<Sesion & { activa: EmpresaDelUsuario }> {

@@ -1,19 +1,8 @@
 import Link from "next/link";
+import { MenuLateral } from "@/components/menu-lateral";
 import { SelectorEmpresa } from "@/components/selector-empresa";
-import { NOMBRE_ROL, sesionActual, type Rol } from "@/lib/empresa";
+import { MODULOS_POR_ROL, NOMBRE_ROL, sesionActual } from "@/lib/empresa";
 import { cerrarSesion } from "../login/acciones";
-
-const MENU: { href: string; texto: string; roles: Rol[] }[] = [
-  { href: "/", texto: "Inicio", roles: ["admin", "bodega", "vendedor"] },
-  { href: "/ventas", texto: "Vender", roles: ["admin", "vendedor"] },
-  { href: "/cartera", texto: "Cartera y abonos", roles: ["admin", "vendedor"] },
-  { href: "/productos", texto: "Productos", roles: ["admin", "bodega", "vendedor"] },
-  { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
-  { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
-  { href: "/informes", texto: "Informes", roles: ["admin"] },
-  { href: "/usuarios", texto: "Usuarios", roles: ["admin"] },
-  { href: "/configuracion", texto: "Configuración", roles: ["admin"] },
-];
 
 export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const { perfil, activa, todas } = await sesionActual();
@@ -21,25 +10,12 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row print:block print:bg-white">
       <aside className="flex flex-col gap-4 bg-slate-900 p-4 text-slate-100 md:w-60 print:hidden">
-        <p className="text-lg font-bold">CRM VIP</p>
+        <Link href="/" className="text-lg font-bold">
+          CRM VIP
+        </Link>
 
         {activa && (
-          <nav className="flex gap-1 overflow-x-auto md:flex-col">
-            {MENU.filter((item) => item.roles.includes(activa.rol)).map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="whitespace-nowrap rounded-lg px-3 py-2 text-sm hover:bg-slate-800"
-              >
-                {item.texto}
-              </Link>
-            ))}
-            {perfil.acceso_total && (
-              <Link href="/empresas" className="whitespace-nowrap rounded-lg px-3 py-2 text-sm hover:bg-slate-800">
-                Empresas
-              </Link>
-            )}
-          </nav>
+          <MenuLateral rol={activa.rol} modulos={MODULOS_POR_ROL[activa.rol]} accesoTotal={perfil.acceso_total} />
         )}
 
         <div className="text-sm md:mt-auto">

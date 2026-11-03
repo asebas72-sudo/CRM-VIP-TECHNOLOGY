@@ -1,7 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
-import { agregarUsuario, cambiarRol, type EstadoAgregar } from "./acciones";
+import { useActionState, useState, useTransition } from "react";
+import { agregarUsuario, cambiarCelular, cambiarRol, type EstadoAgregar } from "./acciones";
 
 const campo =
   "mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20";
@@ -28,6 +28,7 @@ export function FormularioAgregar({ empresas }: { empresas: { id: string; nombre
             <option value="admin">Administrador</option>
             <option value="bodega">Bodega</option>
             <option value="vendedor">Vendedor</option>
+            <option value="tecnico">Técnico (reparaciones)</option>
           </select>
         </label>
       </div>
@@ -87,7 +88,45 @@ export function SelectorRol({
         <option value="admin">Administrador</option>
         <option value="bodega">Bodega</option>
         <option value="vendedor">Vendedor</option>
+        <option value="tecnico">Técnico (reparaciones)</option>
       </select>
     </form>
+  );
+}
+
+/** Celular del usuario (se usa para avisar a los técnicos por WhatsApp). */
+export function CampoCelular({ usuarioId, celular }: { usuarioId: string; celular: string | null }) {
+  const [valor, setValor] = useState(celular ?? "");
+  const [guardado, setGuardado] = useState(celular ?? "");
+  const [error, setError] = useState(false);
+  const [guardando, iniciar] = useTransition();
+  const cambiado = valor.replace(/\D/g, "") !== guardado;
+
+  return (
+    <div className="mt-1 flex items-center gap-1">
+      <input
+        value={valor}
+        onChange={(e) => setValor(e.target.value)}
+        inputMode="numeric"
+        placeholder="Celular"
+        aria-label="Celular"
+        className={`w-32 rounded-md border px-2 py-0.5 text-xs ${error ? "border-red-500" : "border-slate-300"}`}
+      />
+      {cambiado && (
+        <button
+          disabled={guardando}
+          onClick={() =>
+            iniciar(async () => {
+              const r = await cambiarCelular(usuarioId, valor);
+              setError(Boolean(r.error));
+              if (!r.error) setGuardado(valor.replace(/\D/g, ""));
+            })
+          }
+          className="rounded-md bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white"
+        >
+          {guardando ? "..." : "Guardar"}
+        </button>
+      )}
+    </div>
   );
 }

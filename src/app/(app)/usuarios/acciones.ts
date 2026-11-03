@@ -5,7 +5,7 @@ import { crearClienteServidor } from "@/lib/supabase/server";
 
 export type EstadoAgregar = { error?: string; mensaje?: string };
 
-const ROLES = ["admin", "bodega", "vendedor"];
+const ROLES = ["admin", "bodega", "vendedor", "tecnico"];
 
 export async function agregarUsuario(_: EstadoAgregar, form: FormData): Promise<EstadoAgregar> {
   const correo = String(form.get("correo") ?? "").trim();
@@ -64,4 +64,12 @@ export async function cambiarActivo(form: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath("/usuarios");
+}
+
+export async function cambiarCelular(usuarioId: string, celular: string): Promise<{ error?: string }> {
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("definir_celular", { p_usuario: usuarioId, p_celular: celular });
+  if (error) return { error: error.message };
+  revalidatePath("/usuarios");
+  return {};
 }

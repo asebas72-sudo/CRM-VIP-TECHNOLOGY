@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { ValorCopiable } from "@/components/copiar";
 import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { pesos } from "@/lib/formato";
+import { comprimirImagen as comprimir } from "@/lib/imagenes";
 import type { DocumentoLeido } from "@/lib/facturas/foto";
 import { verCompra, type ProductoCatalogo, type ResultadoImportacion } from "../importar/acciones";
 import { catalogoEmpresa, guardarCompraManual, leerFoto, type CompraManual } from "./acciones";
@@ -35,19 +36,6 @@ function codigoDesde(texto: string): string {
     .map((p) => p.slice(0, 4))
     .join("-");
   return base ? `P-${base}` : "";
-}
-
-/** Reduce fotos del celular (varios MB) a JPEG de máx. 2000 px antes de enviarlas. */
-async function comprimir(archivo: File): Promise<File> {
-  if (!archivo.type.startsWith("image/") || archivo.type === "image/gif") return archivo;
-  const imagen = await createImageBitmap(archivo);
-  const escala = Math.min(1, 2000 / Math.max(imagen.width, imagen.height));
-  const lienzo = document.createElement("canvas");
-  lienzo.width = Math.round(imagen.width * escala);
-  lienzo.height = Math.round(imagen.height * escala);
-  lienzo.getContext("2d")!.drawImage(imagen, 0, 0, lienzo.width, lienzo.height);
-  const blob = await new Promise<Blob | null>((ok) => lienzo.toBlob(ok, "image/jpeg", 0.85));
-  return blob ? new File([blob], archivo.name.replace(/\.\w+$/, ".jpg"), { type: "image/jpeg" }) : archivo;
 }
 
 export function RegistroFoto({
