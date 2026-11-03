@@ -42,6 +42,7 @@ next-env.d.ts
 !.env.example
 
 # facturas reales (datos de terceros, nunca al repositorio)
-Facturas/
+# Solo la carpeta de facturas de la raíz (no src/lib/facturas, que es código)
+/Facturas/
 *.xml
 !supabase/**/*.xml
