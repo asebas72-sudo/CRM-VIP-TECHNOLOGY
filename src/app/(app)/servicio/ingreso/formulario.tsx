@@ -5,19 +5,16 @@ import { useRef, useState, useTransition } from "react";
 import { botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { Firma, type FirmaRef } from "@/components/firma";
 import { comprimirImagen } from "@/lib/imagenes";
-import { ACCESORIOS, enlaceWhatsapp, mensajeIngreso, TIPOS_EQUIPO } from "@/lib/servicio";
+import { ACCESORIOS, aplicarPlantilla, enlaceWhatsapp, pesosCO, TIPOS_EQUIPO } from "@/lib/servicio";
 import { crearOrden, type ResultadoIngreso } from "../acciones";
-import { campo, CamposCliente, etiqueta } from "../cliente-campos";
+import { campo, CampoEmpresa, CamposCliente, etiqueta } from "../cliente-campos";
 
-export function FormularioIngreso({
-  marcas,
-  empresa,
-  valorRevision,
-}: {
-  marcas: string[];
-  empresa: string;
-  valorRevision: number;
-}) {
+type EmpresaIngreso = { id: string; nombre: string; valorRevision: number; diasEntrega: number; plantilla: string };
+
+export function FormularioIngreso({ marcas, empresas }: { marcas: string[]; empresas: EmpresaIngreso[] }) {
+  const [empresaId, setEmpresaId] = useState(empresas[0].id);
+  const empresa = empresas.find((e) => e.id === empresaId) ?? empresas[0];
+  const valorRevision = empresa.valorRevision;
   const formulario = useRef<HTMLFormElement>(null);
   const firma = useRef<FirmaRef>(null);
   const [foto, setFoto] = useState<File | null>(null);
@@ -45,14 +42,18 @@ export function FormularioIngreso({
       const r = await crearOrden(datos);
       setResultado(r);
       if (r.ok) {
+        const e = empresas.find((x) => x.id === r.empresaId) ?? empresa;
         setMensaje(
-          mensajeIngreso({
-            empresa,
-            nombre: r.nombre,
+          aplicarPlantilla(e.plantilla, {
+            empresa: e.nombre,
+            cliente: r.nombre,
             equipo: r.equipo,
             codigo: r.codigo,
-            fechaIngreso: r.fechaIngreso,
-            valorRevision,
+            orden: r.consecutivo,
+            fecha_ingreso: r.fechaIngreso,
+            fecha_entrega: r.fechaEntrega,
+            valor_revision: pesosCO(e.valorRevision),
+            estado: "Ingresado",
           }),
         );
       }
@@ -76,7 +77,13 @@ export function FormularioIngreso({
       <div className="space-y-6">
         <section className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
           <h2 className="font-semibold text-slate-900">1. Cliente</h2>
-          <CamposCliente />
+          <CampoEmpresa empresas={empresas} valor={empresaId} alCambiar={setEmpresaId} />
+          {empresas.length > 1 && (
+            <p className="-mt-2 text-xs text-slate-500">
+              Entrega estimada en {empresa.diasEntrega} días · revisión {pesosCO(empresa.valorRevision)}
+            </p>
+          )}
+          <CamposCliente empresaId={empresaId} />
         </section>
 
         <section className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">

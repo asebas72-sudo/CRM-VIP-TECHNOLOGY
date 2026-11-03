@@ -17,6 +17,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
       { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
       { href: "/informes", texto: "Informes", roles: ["admin"] },
+      { href: "/configuracion", texto: "Configuración", roles: ["admin"] },
     ],
   },
   servicio: {
@@ -26,14 +27,12 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/servicio/ingreso", texto: "Nuevo ingreso", roles: ["admin", "vendedor", "tecnico"] },
       { href: "/servicio/asesorias", texto: "Asesorías", roles: ["admin", "vendedor", "tecnico"] },
       { href: "/servicio/asesorias/nueva", texto: "Nueva asesoría", roles: ["admin", "vendedor", "tecnico"] },
+      { href: "/servicio/configuracion", texto: "Configuración y mensajes", roles: ["admin"] },
     ],
   },
 };
 
-const COMUNES: Opcion[] = [
-  { href: "/usuarios", texto: "Usuarios", roles: ["admin"] },
-  { href: "/configuracion", texto: "Configuración", roles: ["admin"] },
-];
+const COMUNES: Opcion[] = [{ href: "/usuarios", texto: "Usuarios", roles: ["admin"] }];
 
 /** Menú del módulo en el que está el usuario (ventas o servicio técnico). */
 export function MenuLateral({ rol, modulos, accesoTotal }: { rol: Rol; modulos: Modulo[]; accesoTotal: boolean }) {

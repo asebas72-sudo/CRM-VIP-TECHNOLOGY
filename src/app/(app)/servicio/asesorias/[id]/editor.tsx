@@ -5,12 +5,14 @@ import { useState, useTransition } from "react";
 import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import type { Rol } from "@/lib/empresa";
 import {
+  aplicarPlantilla,
+  clavePorEstadoAsesoria,
   enlaceWhatsapp,
   ESTADOS_ASESORIA,
   ESTILO_ESTADO_ASESORIA,
-  mensajeAsesoriaCliente,
-  mensajeAsesoriaTecnico,
+  pesosCO,
   type EstadoAsesoria,
+  type Plantillas,
 } from "@/lib/servicio";
 import { actualizarAsesoria } from "../../acciones";
 import { campo, etiqueta } from "../../cliente-campos";
@@ -40,12 +42,14 @@ export function EditorAsesoria({
   rol,
   usuarioId,
   empresa,
+  plantillas,
 }: {
   asesoria: AsesoriaEditable;
   tecnicos: Tecnico[];
   rol: Rol;
   usuarioId: string;
   empresa: string;
+  plantillas: Plantillas;
 }) {
   const router = useRouter();
   const bloqueada = asesoria.estado === "REALIZADA";
@@ -66,24 +70,22 @@ export function EditorAsesoria({
   const tecnico = tecnicos.find((t) => t.usuario_id === f.tecnico_id);
   const visita = visitaLegible(f.fecha_visita);
 
-  const waTecnico =
-    tecnico?.celular &&
-    enlaceWhatsapp(
-      tecnico.celular,
-      mensajeAsesoriaTecnico({
-        tecnico: tecnico.nombre,
-        numero: asesoria.consecutivo,
-        cliente: asesoria.cliente,
-        celular: asesoria.celular,
-        solicitud: asesoria.solicitud,
-        fallas: asesoria.fallas,
-        fechaVisita: visita,
-      }),
-    );
-  const waCliente = enlaceWhatsapp(
-    asesoria.celular,
-    mensajeAsesoriaCliente({ empresa, nombre: asesoria.cliente, numero: asesoria.consecutivo, solicitud: asesoria.solicitud, fechaVisita: visita }),
-  );
+  const valores = {
+    cliente: asesoria.cliente,
+    celular: asesoria.celular,
+    numero: asesoria.consecutivo,
+    solicitud: asesoria.solicitud,
+    detalle: asesoria.fallas,
+    empresa,
+    estado: ESTILO_ESTADO_ASESORIA[f.estado].texto,
+    fecha_visita: visita,
+    tecnico: tecnico?.nombre ?? null,
+    costo: f.costo ? pesosCO(Number(f.costo)) : null,
+    informe: f.observacion_final.trim() || null,
+  };
+  const waTecnico = tecnico?.celular && enlaceWhatsapp(tecnico.celular, aplicarPlantilla(plantillas.ASESORIA_TECNICO, valores));
+  // Mensaje al cliente según el estado elegido
+  const waCliente = enlaceWhatsapp(asesoria.celular, aplicarPlantilla(plantillas[clavePorEstadoAsesoria(f.estado)], valores));
 
   function guardar(estado = f.estado) {
     setError(undefined);
@@ -183,7 +185,7 @@ export function EditorAsesoria({
           )}
           {waCliente && (
             <a href={waCliente} target="_blank" rel="noreferrer" className="rounded-lg border border-green-600 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50">
-              📲 Confirmar al cliente
+              📲 Mensaje al cliente ({ESTILO_ESTADO_ASESORIA[f.estado].texto})
             </a>
           )}
         </div>

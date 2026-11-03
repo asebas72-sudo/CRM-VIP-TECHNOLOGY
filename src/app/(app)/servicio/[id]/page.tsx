@@ -1,22 +1,22 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { exigirRol } from "@/lib/empresa";
 import { enlaceWhatsapp, ESTILO_ESTADO_ORDEN, fechaCorta, fechaHora, type EstadoOrden } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { tecnicosEmpresa, urlsFirmadas } from "../datos";
+import { empresasServicio, tecnicosEmpresa, urlsFirmadas } from "../datos";
 import { FichaTecnica, type OrdenEditable } from "./ficha-tecnica";
 
 export default async function DetalleOrden({ params }: PageProps<"/servicio/[id]">) {
   const { id } = await params;
-  const { activa } = await exigirRol("admin", "vendedor", "tecnico");
   const supabase = await crearClienteServidor();
-
-  const [{ data: o }, tecnicos, { data: yo }] = await Promise.all([
-    supabase.from("ordenes_servicio").select("*").eq("empresa_id", activa.id).eq("id", id).maybeSingle(),
-    tecnicosEmpresa(activa.id),
+  // La orden puede ser de cualquier empresa del usuario (la base de datos valida el acceso)
+  const [{ data: o }, empresas, { data: yo }] = await Promise.all([
+    supabase.from("ordenes_servicio").select("*").eq("id", id).maybeSingle(),
+    empresasServicio(),
     supabase.auth.getClaims(),
   ]);
-  if (!o) notFound();
+  const empresa = empresas.find((e) => e.id === o?.empresa_id);
+  if (!o || !empresa) notFound();
+  const tecnicos = await tecnicosEmpresa(empresa.id);
 
   const urls = await urlsFirmadas([o.foto_ingreso_path, o.firma_path, ...(o.fotos as string[])]);
   const estado = ESTILO_ESTADO_ORDEN[o.estado as EstadoOrden];
@@ -24,6 +24,10 @@ export default async function DetalleOrden({ params }: PageProps<"/servicio/[id]
 
   const editable: OrdenEditable = {
     id: o.id,
+    consecutivo: o.consecutivo,
+    fallas: o.fallas,
+    fechaIngreso: fechaCorta(o.fecha_ingreso),
+    fechaEntrega: o.fecha_entrega_estimada ? fechaCorta(`${o.fecha_entrega_estimada}T12:00:00`) : null,
     codigo: o.codigo,
     cliente: o.cliente_nombre,
     celular: o.celular,
@@ -47,7 +51,10 @@ export default async function DetalleOrden({ params }: PageProps<"/servicio/[id]
         </Link>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm text-slate-500">Orden #{o.consecutivo}</p>
+            <p className="text-sm text-slate-500">
+              {empresas.length > 1 && <strong className="text-slate-700">{empresa.nombre} · </strong>}
+              Orden #{o.consecutivo}
+            </p>
             <h1 className="font-mono text-2xl font-bold text-violet-800">{o.codigo}</h1>
             <span className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${estado.clase}`}>
               {estado.icono} {estado.texto}
@@ -108,7 +115,15 @@ export default async function DetalleOrden({ params }: PageProps<"/servicio/[id]
           )}
         </section>
 
-        <FichaTecnica orden={editable} tecnicos={tecnicos} rol={activa.rol} usuarioId={yo?.claims.sub ?? ""} empresa={activa.nombre} />
+        <FichaTecnica
+          orden={editable}
+          tecnicos={tecnicos}
+          rol={empresa.rol}
+          usuarioId={yo?.claims.sub ?? ""}
+          empresa={empresa.nombre}
+          plantillas={empresa.plantillas}
+          valorRevision={empresa.valorRevision}
+        />
       </div>
     </div>
   );

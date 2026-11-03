@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useRef, useState, useTransition } from "react";
 import { botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { comprimirImagen } from "@/lib/imagenes";
-import { enlaceWhatsapp, mensajeAsesoriaCliente, SOLICITUDES_ASESORIA } from "@/lib/servicio";
+import { aplicarPlantilla, enlaceWhatsapp, SOLICITUDES_ASESORIA } from "@/lib/servicio";
 import { crearAsesoria, type ResultadoAsesoria } from "../../acciones";
-import { campo, CamposCliente, etiqueta } from "../../cliente-campos";
+import { campo, CampoEmpresa, CamposCliente, etiqueta } from "../../cliente-campos";
 
-export function FormularioAsesoria({ empresa }: { empresa: string }) {
+type EmpresaAsesoria = { id: string; nombre: string; plantilla: string };
+
+export function FormularioAsesoria({ empresas }: { empresas: EmpresaAsesoria[] }) {
+  const [empresaId, setEmpresaId] = useState(empresas[0].id);
   const formulario = useRef<HTMLFormElement>(null);
   const [imagen, setImagen] = useState<File | null>(null);
   const [resultado, setResultado] = useState<ResultadoAsesoria | null>(null);
@@ -23,7 +26,19 @@ export function FormularioAsesoria({ empresa }: { empresa: string }) {
     iniciar(async () => {
       const r = await crearAsesoria(datos);
       setResultado(r);
-      if (r.ok) setMensaje(mensajeAsesoriaCliente({ empresa, nombre: r.nombre, numero: r.consecutivo, solicitud: r.solicitud }));
+      if (r.ok) {
+        const e = empresas.find((x) => x.id === r.empresaId) ?? empresas[0];
+        setMensaje(
+          aplicarPlantilla(e.plantilla, {
+            empresa: e.nombre,
+            cliente: r.nombre,
+            celular: r.celular,
+            numero: r.consecutivo,
+            solicitud: r.solicitud,
+            estado: "Pendiente",
+          }),
+        );
+      }
     });
   }
 
@@ -39,7 +54,8 @@ export function FormularioAsesoria({ empresa }: { empresa: string }) {
     <form ref={formulario} onSubmit={enviar} className="max-w-3xl space-y-6">
       <section className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
         <h2 className="font-semibold text-slate-900">1. Cliente</h2>
-        <CamposCliente />
+        <CampoEmpresa empresas={empresas} valor={empresaId} alCambiar={setEmpresaId} />
+        <CamposCliente empresaId={empresaId} />
       </section>
 
       <section className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">

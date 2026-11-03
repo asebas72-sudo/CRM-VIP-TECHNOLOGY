@@ -1,11 +1,25 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { exigirRol } from "@/lib/empresa";
+import { MODULOS_POR_ROL, sesionActual, type EmpresaDelUsuario } from "@/lib/empresa";
 import { construirCodigo, ESTADOS_ASESORIA, ESTADOS_ORDEN, fechaCorta, MAX_FOTOS } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
 
-const exigirServicio = () => exigirRol("admin", "vendedor", "tecnico");
+/** Empresa elegida en el formulario, si el usuario trabaja allí en reparaciones. */
+async function empresaServicio(id: string): Promise<EmpresaDelUsuario> {
+  const { todas } = await sesionActual();
+  const empresa = todas.find((e) => e.id === id && MODULOS_POR_ROL[e.rol].includes("servicio"));
+  if (!empresa) throw new Error("Seleccione una empresa en la que trabaje en reparaciones.");
+  return empresa;
+}
+
+/** Empresa de una orden o asesoría ya registrada (la base de datos valida el acceso). */
+async function empresaDeRegistro(tabla: "ordenes_servicio" | "asesorias", id: string): Promise<EmpresaDelUsuario> {
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase.from(tabla).select("empresa_id").eq("id", id).maybeSingle();
+  if (!data) throw new Error("No se encontró el registro o no tiene acceso.");
+  return empresaServicio(data.empresa_id);
+}
 
 const texto = (form: FormData, campo: string) => String(form.get(campo) ?? "").trim();
 const digitos = (v: string) => v.replace(/\D/g, "");
@@ -13,8 +27,8 @@ const digitos = (v: string) => v.replace(/\D/g, "");
 export type ClienteServicio = { id: string; nombre: string; telefono: string | null; correo: string | null };
 
 /** Busca un cliente de la empresa por cédula para autocompletar el formulario. */
-export async function buscarClientePorCedula(cedula: string): Promise<ClienteServicio | null> {
-  const { activa } = await exigirServicio();
+export async function buscarClientePorCedula(cedula: string, empresaId: string): Promise<ClienteServicio | null> {
+  const activa = await empresaServicio(empresaId);
   const doc = digitos(cedula);
   if (doc.length < 5) return null;
   const supabase = await crearClienteServidor();
@@ -76,12 +90,13 @@ export type ResultadoIngreso =
       equipo: string;
       fechaIngreso: string;
       fechaEntrega: string;
+      empresaId: string;
     }
   | { ok: false; error: string };
 
 export async function crearOrden(form: FormData): Promise<ResultadoIngreso> {
   try {
-    const { activa } = await exigirServicio();
+    const activa = await empresaServicio(texto(form, "empresa_id"));
     const nombre = texto(form, "nombre");
     const cedula = digitos(texto(form, "cedula"));
     const celular = digitos(texto(form, "celular"));
@@ -159,6 +174,7 @@ export async function crearOrden(form: FormData): Promise<ResultadoIngreso> {
       equipo,
       fechaIngreso: fechaCorta(hoy),
       fechaEntrega: fechaCorta(entrega),
+      empresaId: activa.id,
     };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo registrar el ingreso." };
@@ -168,8 +184,8 @@ export async function crearOrden(form: FormData): Promise<ResultadoIngreso> {
 /** Guarda la ficha técnica (técnico, estado, costo, bitácora, fotos e informe). */
 export async function actualizarOrden(form: FormData): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { activa } = await exigirServicio();
     const id = texto(form, "id");
+    const activa = await empresaDeRegistro("ordenes_servicio", id);
     const estado = texto(form, "estado");
     if (!(ESTADOS_ORDEN as readonly string[]).includes(estado)) return { ok: false, error: "Estado inválido." };
 
@@ -227,7 +243,12 @@ export async function actualizarOrden(form: FormData): Promise<{ ok: boolean; er
 }
 
 export async function entregarOrden(id: string): Promise<{ ok: boolean; error?: string }> {
-  const { activa } = await exigirServicio();
+  let activa: EmpresaDelUsuario;
+  try {
+    activa = await empresaDeRegistro("ordenes_servicio", id);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
   const supabase = await crearClienteServidor();
   const { error, count } = await supabase
     .from("ordenes_servicio")
@@ -252,12 +273,12 @@ async function usuarioActual(): Promise<string | undefined> {
 // ---------------------------------------------------------------------
 
 export type ResultadoAsesoria =
-  | { ok: true; id: string; consecutivo: number; nombre: string; celular: string; solicitud: string }
+  | { ok: true; id: string; consecutivo: number; nombre: string; celular: string; solicitud: string; empresaId: string }
   | { ok: false; error: string };
 
 export async function crearAsesoria(form: FormData): Promise<ResultadoAsesoria> {
   try {
-    const { activa } = await exigirServicio();
+    const activa = await empresaServicio(texto(form, "empresa_id"));
     const nombre = texto(form, "nombre");
     const cedula = digitos(texto(form, "cedula"));
     const celular = digitos(texto(form, "celular"));
@@ -297,15 +318,20 @@ export async function crearAsesoria(form: FormData): Promise<ResultadoAsesoria> 
     }
 
     revalidatePath("/servicio/asesorias");
-    return { ok: true, id: data.id, consecutivo, nombre, celular, solicitud };
+    return { ok: true, id: data.id, consecutivo, nombre, celular, solicitud, empresaId: activa.id };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "No se pudo registrar la asesoría." };
   }
 }
 
 export async function actualizarAsesoria(form: FormData): Promise<{ ok: boolean; error?: string }> {
-  const { activa } = await exigirServicio();
   const id = texto(form, "id");
+  let activa: EmpresaDelUsuario;
+  try {
+    activa = await empresaDeRegistro("asesorias", id);
+  } catch (e) {
+    return { ok: false, error: (e as Error).message };
+  }
   const estado = texto(form, "estado");
   if (!(ESTADOS_ASESORIA as readonly string[]).includes(estado)) return { ok: false, error: "Estado inválido." };
 
@@ -340,4 +366,25 @@ export async function actualizarAsesoria(form: FormData): Promise<{ ok: boolean;
   revalidatePath("/servicio/asesorias");
   revalidatePath(`/servicio/asesorias/${id}`);
   return { ok: true };
+}
+
+export async function guardarConfiguracionServicio(form: FormData): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const activa = await empresaServicio(texto(form, "empresa_id"));
+    if (activa.rol !== "admin") return { ok: false, error: "Solo un administrador puede cambiar la configuración." };
+    const mensajes = JSON.parse(texto(form, "mensajes") || "{}") as Record<string, string>;
+    const valor = Number(digitos(texto(form, "valor_revision")) || 0);
+    const dias = Number(digitos(texto(form, "dias_entrega")) || 8);
+
+    const supabase = await crearClienteServidor();
+    const { error } = await supabase
+      .from("empresas")
+      .update({ mensajes_servicio: mensajes, valor_revision: valor, dias_entrega_servicio: Math.min(Math.max(dias, 1), 90) })
+      .eq("id", activa.id);
+    if (error) return { ok: false, error: error.message };
+    revalidatePath("/servicio", "layout");
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "No se pudo guardar." };
+  }
 }

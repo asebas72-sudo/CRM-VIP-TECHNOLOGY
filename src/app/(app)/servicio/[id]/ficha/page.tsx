@@ -1,21 +1,23 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CodigoQR } from "@/components/codigo-qr";
-import { exigirRol } from "@/lib/empresa";
 import { fechaCorta, fechaHora } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { datosEmpresa, urlsFirmadas } from "../../datos";
+import { empresasServicio, urlsFirmadas } from "../../datos";
 import { ImprimirAlAbrir } from "./imprimir";
 
 /** Ficha de ingreso imprimible (media carta): se entrega o se envía al cliente. */
 export default async function FichaIngreso({ params, searchParams }: PageProps<"/servicio/[id]/ficha">) {
   const { id } = await params;
   const { imprimir } = await searchParams;
-  const { activa } = await exigirRol("admin", "vendedor", "tecnico");
   const supabase = await crearClienteServidor();
-  const { data: o } = await supabase.from("ordenes_servicio").select("*").eq("empresa_id", activa.id).eq("id", id).maybeSingle();
-  if (!o) notFound();
-  const [e, urls] = await Promise.all([datosEmpresa(activa.id), urlsFirmadas([o.firma_path])]);
+  const [{ data: o }, empresas] = await Promise.all([
+    supabase.from("ordenes_servicio").select("*").eq("id", id).maybeSingle(),
+    empresasServicio(),
+  ]);
+  const e = empresas.find((x) => x.id === o?.empresa_id);
+  if (!o || !e) notFound();
+  const urls = await urlsFirmadas([o.firma_path]);
   const firma = o.firma_path ? urls.get(o.firma_path) : undefined;
 
   return (
@@ -66,7 +68,7 @@ export default async function FichaIngreso({ params, searchParams }: PageProps<"
 
         <section className="space-y-1 border-t border-slate-300 pt-3 text-xs">
           <p className="font-bold">Condiciones del servicio</p>
-          <p>• Toda revisión cuesta ${Number(e.valor_revision).toLocaleString("es-CO")} siempre y cuando el cliente no desee reparar el equipo.</p>
+          <p>• Toda revisión cuesta ${e.valorRevision.toLocaleString("es-CO")} siempre y cuando el cliente no desee reparar el equipo.</p>
           <p>• Para reclamar el equipo debe presentar el código de esta ficha (enviado a su correo o WhatsApp).</p>
           <p>
             • El equipo debe reclamarse en un tiempo inferior a 30 días. Pasado este tiempo se cobrará $1.000 por día por concepto de

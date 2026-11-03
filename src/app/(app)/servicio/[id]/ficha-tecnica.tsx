@@ -7,19 +7,27 @@ import { pesos } from "@/lib/formato";
 import { comprimirImagen } from "@/lib/imagenes";
 import type { Rol } from "@/lib/empresa";
 import {
+  aplicarPlantilla,
+  clavePorEstadoOrden,
   enlaceWhatsapp,
   ESTADOS_ORDEN,
   ESTILO_ESTADO_ORDEN,
   MAX_FOTOS,
-  mensajeActualizacion,
-  type CambioOrden,
+  pesosCO,
   type EstadoOrden,
+  type Plantillas,
 } from "@/lib/servicio";
 import { actualizarOrden, entregarOrden } from "../acciones";
 import { campo, etiqueta } from "../cliente-campos";
 
+type CambioOrden = { campo: string; antes: string; ahora: string };
+
 export type OrdenEditable = {
   id: string;
+  consecutivo: number;
+  fallas: string | null;
+  fechaIngreso: string;
+  fechaEntrega: string | null;
   codigo: string;
   cliente: string;
   celular: string;
@@ -43,12 +51,16 @@ export function FichaTecnica({
   rol,
   usuarioId,
   empresa,
+  plantillas,
+  valorRevision,
 }: {
   orden: OrdenEditable;
   tecnicos: Tecnico[];
   rol: Rol;
   usuarioId: string;
   empresa: string;
+  plantillas: Plantillas;
+  valorRevision: number;
 }) {
   const router = useRouter();
   const [f, setF] = useState({
@@ -62,7 +74,7 @@ export function FichaTecnica({
   });
   const [fotos, setFotos] = useState(orden.fotos);
   const [nuevas, setNuevas] = useState<{ archivo: File; url: string }[]>([]);
-  const [aviso, setAviso] = useState<{ cambios: CambioOrden[]; mensaje: string } | null>(null);
+  const [aviso, setAviso] = useState<{ cambios: CambioOrden[]; mensaje: string; manual?: boolean } | null>(null);
   const [error, setError] = useState<string>();
   const [confirmarEntrega, setConfirmarEntrega] = useState(false);
   const [guardando, iniciar] = useTransition();
@@ -91,6 +103,29 @@ export function FichaTecnica({
     return cambios;
   }
 
+  function valores(estado: EstadoOrden, costo: string, informe: string, tecnicoId: string) {
+    return {
+      cliente: orden.cliente,
+      equipo: orden.equipo,
+      codigo: orden.codigo,
+      orden: orden.consecutivo,
+      empresa,
+      estado: ESTILO_ESTADO_ORDEN[estado].texto,
+      costo: costo ? pesosCO(Number(costo)) : null,
+      informe: informe.trim() || null,
+      fallas: orden.fallas,
+      fecha_ingreso: orden.fechaIngreso,
+      fecha_entrega: orden.fechaEntrega,
+      valor_revision: pesosCO(valorRevision),
+      tecnico: tecnicos.find((t) => t.usuario_id === tecnicoId)?.nombre ?? null,
+    };
+  }
+
+  function mensajeCliente(estadoCambio: boolean) {
+    const plantilla = estadoCambio ? plantillas[clavePorEstadoOrden(f.estado)] : plantillas.ORDEN_ACTUALIZACION;
+    return aplicarPlantilla(plantilla, valores(f.estado, f.costo.replace(/\D/g, ""), f.observacion_final, f.tecnico_id));
+  }
+
   function guardar() {
     setError(undefined);
     const datos = new FormData();
@@ -109,9 +144,7 @@ export function FichaTecnica({
       router.refresh();
       setAviso({
         cambios,
-        mensaje: cambios.length
-          ? mensajeActualizacion({ empresa, cliente: orden.cliente, equipo: orden.equipo, codigo: orden.codigo, cambios })
-          : "",
+        mensaje: cambios.length ? mensajeCliente(cambios.some((c) => c.campo === "Estado")) : "",
       });
     });
   }
@@ -137,11 +170,20 @@ export function FichaTecnica({
     <section className="space-y-5 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="font-semibold text-slate-900">🛠️ Ficha técnica</h2>
+        <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setAviso({ cambios: [], mensaje: mensajeCliente(true), manual: true })}
+          className="rounded-lg border border-green-600 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-50"
+        >
+          📲 Escribir al cliente
+        </button>
         {orden.estado === "LISTO" && (
           <button type="button" onClick={() => setConfirmarEntrega(true)} className={botonExito}>
             📦 Marcar como entregado
           </button>
         )}
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -162,7 +204,12 @@ export function FichaTecnica({
             </select>
             {tecnicoAsignado?.celular && (
               <a
-                href={enlaceWhatsapp(tecnicoAsignado.celular, `Hola ${tecnicoAsignado.nombre}, tienes asignada la orden ${orden.codigo}: ${orden.equipo} de ${orden.cliente}.`) ?? "#"}
+                href={
+                  enlaceWhatsapp(
+                    tecnicoAsignado.celular,
+                    aplicarPlantilla(plantillas.ORDEN_TECNICO, valores(f.estado, f.costo, f.observacion_final, f.tecnico_id)),
+                  ) ?? "#"
+                }
                 target="_blank"
                 rel="noreferrer"
                 title="Avisar al técnico por WhatsApp"
@@ -262,19 +309,19 @@ export function FichaTecnica({
       <Dialogo
         abierto={aviso !== null}
         tono="exito"
-        titulo="Ficha guardada"
+        titulo={aviso?.manual ? `Mensaje para ${orden.cliente}` : "Ficha guardada"}
         alCerrar={() => setAviso(null)}
         acciones={
           <>
             <button type="button" className={botonSecundario} onClick={() => setAviso(null)}>
-              {aviso?.cambios.length ? "No avisar" : "Cerrar"}
+              {aviso?.cambios.length && !aviso.manual ? "No avisar" : "Cerrar"}
             </button>
             {correo && (
               <a href={correo} className={botonSecundario}>
                 ✉️ Correo
               </a>
             )}
-            {wa && aviso?.cambios.length ? (
+            {wa && (aviso?.cambios.length || aviso?.manual) ? (
               <a href={wa} target="_blank" rel="noreferrer" className="rounded-lg bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">
                 📲 Avisar por WhatsApp
               </a>
@@ -282,7 +329,17 @@ export function FichaTecnica({
           </>
         }
       >
-        {aviso?.cambios.length ? (
+        {aviso?.manual ? (
+          <label className="block text-xs font-medium text-slate-600">
+            Mensaje del estado actual ({ESTILO_ESTADO_ORDEN[f.estado].texto}). Puede editarlo:
+            <textarea
+              value={aviso.mensaje}
+              onChange={(e) => setAviso({ ...aviso, mensaje: e.target.value })}
+              rows={10}
+              className={`${campo} text-sm`}
+            />
+          </label>
+        ) : aviso?.cambios.length ? (
           <>
             <p>Cambios que le interesan al cliente:</p>
             <ul className="list-inside list-disc">

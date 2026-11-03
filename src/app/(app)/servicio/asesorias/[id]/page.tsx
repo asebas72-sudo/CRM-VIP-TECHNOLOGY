@@ -1,9 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { exigirRol } from "@/lib/empresa";
 import { enlaceWhatsapp, ESTILO_ESTADO_ASESORIA, fechaHora, type EstadoAsesoria } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { tecnicosEmpresa, urlsFirmadas } from "../../datos";
+import { empresasServicio, tecnicosEmpresa, urlsFirmadas } from "../../datos";
 import { EditorAsesoria } from "./editor";
 
 /** Fecha en hora de Colombia con el formato de <input type="datetime-local"> */
@@ -24,14 +23,15 @@ function paraInput(iso: string | null): string {
 
 export default async function DetalleAsesoria({ params }: PageProps<"/servicio/asesorias/[id]">) {
   const { id } = await params;
-  const { activa } = await exigirRol("admin", "vendedor", "tecnico");
   const supabase = await crearClienteServidor();
-  const [{ data: a }, tecnicos, { data: yo }] = await Promise.all([
-    supabase.from("asesorias").select("*").eq("empresa_id", activa.id).eq("id", id).maybeSingle(),
-    tecnicosEmpresa(activa.id),
+  const [{ data: a }, empresas, { data: yo }] = await Promise.all([
+    supabase.from("asesorias").select("*").eq("id", id).maybeSingle(),
+    empresasServicio(),
     supabase.auth.getClaims(),
   ]);
-  if (!a) notFound();
+  const empresa = empresas.find((e) => e.id === a?.empresa_id);
+  if (!a || !empresa) notFound();
+  const tecnicos = await tecnicosEmpresa(empresa.id);
   const urls = await urlsFirmadas([a.imagen_path]);
   const imagen = a.imagen_path ? urls.get(a.imagen_path) : undefined;
   const estado = ESTILO_ESTADO_ASESORIA[a.estado as EstadoAsesoria];
@@ -43,7 +43,10 @@ export default async function DetalleAsesoria({ params }: PageProps<"/servicio/a
         <Link href="/servicio/asesorias" className="text-sm text-violet-700 hover:underline">
           ← Asesorías
         </Link>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">Asesoría #{a.consecutivo}</h1>
+        <h1 className="mt-1 text-2xl font-bold text-slate-900">
+          Asesoría #{a.consecutivo}
+          {empresas.length > 1 && <span className="ml-2 text-base font-semibold text-slate-500">{empresa.nombre}</span>}
+        </h1>
         <span className={`mt-1 inline-block rounded-full px-3 py-1 text-sm font-semibold ${estado.clase}`}>
           {estado.icono} {estado.texto}
         </span>
@@ -92,9 +95,10 @@ export default async function DetalleAsesoria({ params }: PageProps<"/servicio/a
             observacion_final: a.observacion_final,
           }}
           tecnicos={tecnicos}
-          rol={activa.rol}
+          rol={empresa.rol}
           usuarioId={yo?.claims.sub ?? ""}
-          empresa={activa.nombre}
+          empresa={empresa.nombre}
+          plantillas={empresa.plantillas}
         />
       </div>
     </div>

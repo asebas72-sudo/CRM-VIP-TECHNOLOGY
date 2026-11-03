@@ -8,7 +8,7 @@ export const campo =
 export const etiqueta = "block text-sm font-medium text-slate-700";
 
 /** Cédula, nombre, celular y correo; al escribir la cédula se autocompletan los datos del cliente conocido. */
-export function CamposCliente() {
+export function CamposCliente({ empresaId }: { empresaId: string }) {
   const [nombre, setNombre] = useState("");
   const [celular, setCelular] = useState("");
   const [correo, setCorreo] = useState("");
@@ -17,7 +17,7 @@ export function CamposCliente() {
 
   function buscar(cedula: string) {
     iniciar(async () => {
-      const c = await buscarClientePorCedula(cedula);
+      const c = await buscarClientePorCedula(cedula, empresaId);
       if (c) {
         setNombre(c.nombre);
         setCelular(c.telefono ?? "");
@@ -62,5 +62,35 @@ export function CamposCliente() {
         <input name="correo" type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} className={campo} />
       </label>
     </div>
+  );
+}
+
+/** Empresa a la que se carga el registro; solo se muestra si el usuario trabaja en varias. */
+export function CampoEmpresa({
+  empresas,
+  valor,
+  alCambiar,
+}: {
+  empresas: { id: string; nombre: string }[];
+  valor: string;
+  alCambiar: (id: string) => void;
+}) {
+  if (empresas.length < 2) return <input type="hidden" name="empresa_id" value={valor} />;
+  return (
+    <label className={etiqueta}>
+      Empresa *
+      <select
+        name="empresa_id"
+        value={valor}
+        onChange={(e) => alCambiar(e.target.value)}
+        className={`${campo} font-semibold`}
+      >
+        {empresas.map((e) => (
+          <option key={e.id} value={e.id}>
+            {e.nombre}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }

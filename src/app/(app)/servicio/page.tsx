@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { exigirRol } from "@/lib/empresa";
+import { redirect } from "next/navigation";
 import { pesos } from "@/lib/formato";
 import { enlaceWhatsapp, ESTADOS_ORDEN, ESTILO_ESTADO_ORDEN, fechaCorta, type EstadoOrden } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
-import { tecnicosEmpresa } from "./datos";
+import { empresasServicio, tecnicosDe } from "./datos";
 
 type Orden = {
   id: string;
+  empresa_id: string;
   consecutivo: number;
   codigo: string;
   cliente_nombre: string;
@@ -26,28 +27,33 @@ type Orden = {
 const EN_PROCESO: EstadoOrden[] = ["TALLER", "EN PROCESO", "ESPERA REPUESTOS", "REVISADO"];
 
 export default async function TableroServicio({ searchParams }: PageProps<"/servicio">) {
-  const { activa } = await exigirRol("admin", "vendedor", "tecnico");
+  const empresas = await empresasServicio();
+  if (empresas.length === 0) redirect("/");
   const p = await searchParams;
+  const filtroEmpresa = typeof p.empresa === "string" && empresas.some((e) => e.id === p.empresa) ? p.empresa : "";
+  const varias = empresas.length > 1;
+  const nombreEmpresa = new Map(empresas.map((e) => [e.id, e.nombre]));
+  const soloTecnico = empresas.every((e) => e.rol === "tecnico");
   const q = (typeof p.q === "string" ? p.q : "").trim().toLowerCase();
   const estado = typeof p.estado === "string" ? p.estado : "";
   const tecnico = typeof p.tecnico === "string" ? p.tecnico : "";
   const verEntregados = p.entregados === "1" || estado === "ENTREGADO";
 
   const supabase = await crearClienteServidor();
-  const [ordenesRes, tecnicos] = await Promise.all([
+  const [ordenesRes, tecnicosMap] = await Promise.all([
     supabase
       .from("ordenes_servicio")
       .select(
-        "id, consecutivo, codigo, cliente_nombre, cliente_documento, celular, equipo, tipo_equipo, marca, fallas, estado, tecnico_id, costo, fecha_ingreso, fecha_entrega_estimada",
+        "id, empresa_id, consecutivo, codigo, cliente_nombre, cliente_documento, celular, equipo, tipo_equipo, marca, fallas, estado, tecnico_id, costo, fecha_ingreso, fecha_entrega_estimada",
       )
-      .eq("empresa_id", activa.id)
+      .in("empresa_id", filtroEmpresa ? [filtroEmpresa] : empresas.map((e) => e.id))
       .order("fecha_ingreso", { ascending: false })
-      .limit(2000),
-    tecnicosEmpresa(activa.id),
+      .limit(3000),
+    tecnicosDe(empresas),
   ]);
+  const tecnicos = [...tecnicosMap.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
   if (ordenesRes.error) throw new Error(ordenesRes.error.message);
   const todas = (ordenesRes.data ?? []) as Orden[];
-  const nombreTecnico = new Map(tecnicos.map((t) => [t.usuario_id, t.nombre]));
   const hoy = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
 
   const conteo = (f: (o: Orden) => boolean) => todas.filter(f).length;
@@ -76,8 +82,8 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Órdenes de servicio</h1>
           <p className="text-sm text-slate-500">
-            Equipos ingresados a reparación en {activa.nombre}
-            {activa.rol === "tecnico" && " · ves tus órdenes y las que aún no tienen técnico"}
+            {varias ? (filtroEmpresa ? `Equipos de ${nombreEmpresa.get(filtroEmpresa)}` : "Equipos de todas sus empresas") : `Equipos ingresados en ${empresas[0].nombre}`}
+            {soloTecnico && " · ves tus órdenes y las que aún no tienen técnico"}
           </p>
         </div>
         <Link href="/servicio/ingreso" className="rounded-lg bg-violet-700 px-4 py-2 font-semibold text-white hover:bg-violet-800">
@@ -89,7 +95,7 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
         {tarjetas.map((t) => (
           <Link
             key={t.titulo}
-            href={t.filtro ? `/servicio?estado=${encodeURIComponent(t.filtro)}` : "/servicio"}
+            href={`/servicio?${new URLSearchParams({ ...(t.filtro ? { estado: t.filtro } : {}), ...(filtroEmpresa ? { empresa: filtroEmpresa } : {}) })}`}
             className={`rounded-xl border-l-4 bg-white p-4 ring-1 ring-slate-200 transition hover:shadow-md ${t.borde} ${
               estado === t.filtro ? "ring-2 ring-slate-900" : ""
             }`}
@@ -116,7 +122,17 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
             </option>
           ))}
         </select>
-        {activa.rol !== "tecnico" && (
+        {varias && (
+          <select name="empresa" defaultValue={filtroEmpresa} className="rounded-lg border border-slate-300 bg-white px-3 py-2">
+            <option value="">Todas las empresas</option>
+            {empresas.map((e) => (
+              <option key={e.id} value={e.id}>
+                {e.nombre}
+              </option>
+            ))}
+          </select>
+        )}
+        {!soloTecnico && (
           <select name="tecnico" defaultValue={tecnico} className="rounded-lg border border-slate-300 bg-white px-3 py-2">
             <option value="">Todos los técnicos</option>
             <option value="sin">Sin técnico</option>
@@ -139,6 +155,7 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
           <thead className="sticky top-0 z-10 bg-slate-50 text-slate-600 shadow-[inset_0_-1px_0_var(--color-slate-200)]">
             <tr>
               <th className="px-4 py-3 font-medium">Ingreso</th>
+              {varias && <th className="px-4 py-3 font-medium">Empresa</th>}
               <th className="px-4 py-3 font-medium">Código</th>
               <th className="px-4 py-3 font-medium">Cliente</th>
               <th className="px-4 py-3 font-medium">Equipo</th>
@@ -159,6 +176,7 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
                     {fechaCorta(o.fecha_ingreso)}
                     {vencida && <span className="block text-xs font-semibold text-red-600">⚠ Pasó la fecha estimada</span>}
                   </td>
+                  {varias && <td className="px-4 py-2 text-xs font-semibold text-slate-600">{nombreEmpresa.get(o.empresa_id)}</td>}
                   <td className="px-4 py-2">
                     <Link href={`/servicio/${o.id}`} className="font-mono font-semibold text-violet-700 hover:underline">
                       {o.codigo}
@@ -187,7 +205,7 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
                     <p className="line-clamp-2">{o.fallas ?? "—"}</p>
                   </td>
                   <td className="px-4 py-2">
-                    {o.tecnico_id ? nombreTecnico.get(o.tecnico_id) ?? "—" : <span className="text-amber-700">Sin asignar</span>}
+                    {o.tecnico_id ? tecnicosMap.get(o.tecnico_id)?.nombre ?? "—" : <span className="text-amber-700">Sin asignar</span>}
                   </td>
                   <td className="px-4 py-2 text-right tabular-nums">{o.costo != null ? pesos(o.costo) : "—"}</td>
                   <td className="px-4 py-2">
@@ -200,7 +218,7 @@ export default async function TableroServicio({ searchParams }: PageProps<"/serv
             })}
             {ordenes.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={varias ? 9 : 8} className="px-4 py-10 text-center text-slate-500">
                   No hay órdenes con ese criterio.
                 </td>
               </tr>

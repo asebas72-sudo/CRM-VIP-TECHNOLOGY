@@ -81,100 +81,257 @@ export function enlaceWhatsapp(celular: string | null | undefined, texto = ""): 
   return `https://wa.me/${digitos}${texto ? `?text=${encodeURIComponent(texto)}` : ""}`;
 }
 
-const pesosCO = (n: number) => `$${Math.round(n).toLocaleString("es-CO")}`;
+// ---------------------------------------------------------------------
+// Mensajes de WhatsApp configurables (Reparaciones > Configuración)
+// ---------------------------------------------------------------------
 
-export function mensajeIngreso(d: {
-  empresa: string;
-  nombre: string;
-  equipo: string;
-  codigo: string;
-  fechaIngreso: string;
-  valorRevision: number;
-}): string {
-  return [
-    `Hola ${d.nombre} 👋`,
-    `Tu equipo *${d.equipo}* fue registrado en *${d.empresa}*.`,
+export type ClavePlantilla =
+  | "ORDEN_INGRESADO"
+  | "ORDEN_TALLER"
+  | "ORDEN_EN_PROCESO"
+  | "ORDEN_ESPERA_REPUESTOS"
+  | "ORDEN_REVISADO"
+  | "ORDEN_LISTO"
+  | "ORDEN_ENTREGADO"
+  | "ORDEN_ACTUALIZACION"
+  | "ORDEN_TECNICO"
+  | "ASESORIA_PENDIENTE"
+  | "ASESORIA_CONFIRMADA"
+  | "ASESORIA_REALIZADA"
+  | "ASESORIA_CANCELADA"
+  | "ASESORIA_TECNICO";
+
+export type Plantillas = Record<ClavePlantilla, string>;
+
+export const PLANTILLAS_DEFECTO: Plantillas = {
+  ORDEN_INGRESADO: [
+    "Hola {cliente} 👋",
+    "Tu equipo *{equipo}* fue registrado en *{empresa}*.",
     "",
-    `🧾 Código de caso: *${d.codigo}*`,
-    `📅 Fecha de ingreso: ${d.fechaIngreso}`,
+    "🧾 Código de caso: *{codigo}*",
+    "📅 Fecha de ingreso: {fecha_ingreso}",
+    "📆 Entrega estimada: {fecha_entrega}",
     "",
     "Pronto uno de nuestros técnicos se comunicará contigo.",
     "",
-    `*TODA REVISIÓN CUESTA ${pesosCO(d.valorRevision)}*`,
+    "*TODA REVISIÓN CUESTA {valor_revision}*",
     "",
     "Guarda este código, lo necesitarás para reclamar tu equipo.",
     "¡Gracias por confiar en nosotros!",
-  ].join("\n");
-}
-
-export type CambioOrden = { campo: string; antes: string; ahora: string };
-
-export function mensajeActualizacion(d: {
-  empresa: string;
-  cliente: string;
-  equipo: string;
-  codigo: string;
-  cambios: CambioOrden[];
-}): string {
-  const listo = d.cambios.some((c) => c.campo === "Estado" && c.ahora === "LISTO");
-  const lineas = [
-    `Hola ${d.cliente}, le escribimos de ${d.empresa} con una actualización sobre su equipo "${d.equipo}" (Ticket ${d.codigo}).`,
+  ].join("\n"),
+  ORDEN_TALLER: [
+    "Hola {cliente}, le escribimos de {empresa}.",
     "",
-    ...d.cambios.map((c) =>
-      c.campo === "Estado"
-        ? `• Estado actual: ${ESTILO_ESTADO_ORDEN[c.ahora as EstadoOrden]?.texto ?? c.ahora}`
-        : c.campo === "Costo"
-          ? `• Costo estimado de la reparación: ${pesosCO(Number(c.ahora))}`
-          : `• ${c.campo}: ${c.ahora}`,
-    ),
+    "Su equipo *{equipo}* (ticket {codigo}) ya está en nuestro taller y pronto iniciaremos la revisión.",
     "",
-  ];
-  if (listo) {
-    lineas.push(
-      `Su equipo ya está disponible para ser recogido, puede pasar por él preferiblemente los días LUNES - MIÉRCOLES - VIERNES de 3 de la tarde a 7 de la noche. Agradecemos su retiro dentro de los próximos 15 días hábiles, ya que posterior a esta fecha ${d.empresa} no podrá responder por la custodia del mismo. ¡Quedamos atentos a su visita!`,
-      "",
-      "Gracias por la confianza.",
-    );
-  } else {
-    lineas.push("Quedamos al pendiente de su aprobación; cualquier duda, con gusto le atendemos. ¡Gracias por su confianza!");
-  }
-  return lineas.join("\n");
-}
-
-export function mensajeAsesoriaCliente(d: { empresa: string; nombre: string; numero: number; solicitud: string; fechaVisita?: string | null }): string {
-  return [
-    `Hola ${d.nombre} 👋`,
-    `Tu solicitud de asesoría en *${d.empresa}* fue registrada.`,
+    "¡Gracias por su confianza!",
+  ].join("\n"),
+  ORDEN_EN_PROCESO: [
+    "Hola {cliente}, le escribimos de {empresa}.",
     "",
-    `🧾 Asesoría No. *${d.numero}*`,
-    `🛠️ Solicitud: ${d.solicitud}`,
-    d.fechaVisita ? `📅 Visita: ${d.fechaVisita}` : "Pronto confirmaremos contigo la fecha y hora de la visita.",
+    "Estamos trabajando en su equipo *{equipo}* (ticket {codigo}).",
+    "📝 {informe}",
     "",
+    "Le avisaremos apenas esté listo. ¡Gracias por su confianza!",
+  ].join("\n"),
+  ORDEN_ESPERA_REPUESTOS: [
+    "Hola {cliente}, le escribimos de {empresa}.",
+    "",
+    "Su equipo *{equipo}* (ticket {codigo}) está en espera de repuestos.",
+    "📝 {informe}",
+    "💰 Costo estimado de la reparación: {costo}",
+    "",
+    "Le avisaremos cuando lleguen. Cualquier duda, con gusto le atendemos.",
+  ].join("\n"),
+  ORDEN_REVISADO: [
+    "Hola {cliente}, le escribimos de {empresa} con el diagnóstico de su equipo *{equipo}* (ticket {codigo}).",
+    "",
+    "🔬 Diagnóstico: {informe}",
+    "💰 Costo de la reparación: {costo}",
+    "",
+    "Quedamos al pendiente de su aprobación para continuar; cualquier duda, con gusto le atendemos. ¡Gracias por su confianza!",
+  ].join("\n"),
+  ORDEN_LISTO: [
+    "Hola {cliente}, le escribimos de {empresa}. ✅",
+    "",
+    "Su equipo *{equipo}* (ticket {codigo}) ya está disponible para ser recogido.",
+    "💰 Valor a pagar: {costo}",
+    "📝 {informe}",
+    "",
+    "Puede pasar por él preferiblemente los días LUNES - MIÉRCOLES - VIERNES de 3 de la tarde a 7 de la noche. Agradecemos su retiro dentro de los próximos 15 días hábiles, ya que posterior a esta fecha {empresa} no podrá responder por la custodia del mismo.",
+    "",
+    "Recuerde presentar el código *{codigo}*. ¡Quedamos atentos a su visita!",
+  ].join("\n"),
+  ORDEN_ENTREGADO: [
+    "Hola {cliente}, gracias por confiar en {empresa}. 🙌",
+    "",
+    "Su equipo *{equipo}* (ticket {codigo}) fue entregado.",
+    "",
+    "Si tiene alguna inquietud con el servicio, con gusto le atendemos.",
+  ].join("\n"),
+  ORDEN_ACTUALIZACION: [
+    "Hola {cliente}, le escribimos de {empresa} con una actualización sobre su equipo *{equipo}* (ticket {codigo}).",
+    "",
+    "📌 Estado: {estado}",
+    "💰 Costo de la reparación: {costo}",
+    "📝 {informe}",
+    "",
+    "Cualquier duda, con gusto le atendemos. ¡Gracias por su confianza!",
+  ].join("\n"),
+  ORDEN_TECNICO: [
+    "Hola {tecnico}, tienes asignada la orden *{codigo}* (No. {orden}).",
+    "",
+    "💻 Equipo: {equipo}",
+    "👤 Cliente: {cliente}",
+    "⚠️ Falla reportada: {fallas}",
+  ].join("\n"),
+  ASESORIA_PENDIENTE: [
+    "Hola {cliente} 👋",
+    "Tu solicitud de asesoría en *{empresa}* fue registrada.",
+    "",
+    "🧾 Asesoría No. *{numero}*",
+    "🛠️ Solicitud: {solicitud}",
+    "",
+    "Pronto confirmaremos contigo la fecha y hora de la visita.",
     "¡Gracias por confiar en nosotros!",
-  ].join("\n");
+  ].join("\n"),
+  ASESORIA_CONFIRMADA: [
+    "Hola {cliente} 👋, te escribimos de *{empresa}*.",
+    "",
+    "Tu asesoría No. *{numero}* ({solicitud}) quedó confirmada:",
+    "📅 Visita: {fecha_visita}",
+    "👨‍🔧 Técnico: {tecnico}",
+    "",
+    "¡Nos vemos pronto!",
+  ].join("\n"),
+  ASESORIA_REALIZADA: [
+    "Hola {cliente}, gracias por confiar en {empresa}. 🙌",
+    "",
+    "Tu asesoría No. {numero} ({solicitud}) fue realizada.",
+    "📝 {informe}",
+    "💰 Valor: {costo}",
+    "",
+    "Cualquier inquietud, con gusto te atendemos.",
+  ].join("\n"),
+  ASESORIA_CANCELADA: [
+    "Hola {cliente}, te escribimos de {empresa}.",
+    "",
+    "Tu asesoría No. {numero} ({solicitud}) fue cancelada.",
+    "📝 {informe}",
+    "",
+    "Si deseas reprogramarla, con gusto te ayudamos.",
+  ].join("\n"),
+  ASESORIA_TECNICO: [
+    "Hola {tecnico}, tienes asignada la asesoría No. {numero}.",
+    "",
+    "👤 Cliente: {cliente}",
+    "📱 Celular: {celular}",
+    "🛠️ Solicitud: {solicitud}",
+    "📝 Detalle: {detalle}",
+    "📅 Visita: {fecha_visita}",
+  ].join("\n"),
+};
+
+/** Grupos y nombres que ve el administrador al editar los mensajes. */
+export const GRUPOS_PLANTILLAS: { titulo: string; plantillas: { clave: ClavePlantilla; texto: string; ayuda: string }[] }[] = [
+  {
+    titulo: "Reparaciones · mensajes al cliente según el estado",
+    plantillas: [
+      { clave: "ORDEN_INGRESADO", texto: "📥 Ingresado", ayuda: "Al registrar el equipo y cuando la orden vuelve a Ingresado." },
+      { clave: "ORDEN_TALLER", texto: "🏭 En taller", ayuda: "Cuando la orden pasa a En taller." },
+      { clave: "ORDEN_EN_PROCESO", texto: "🔧 En proceso", ayuda: "Cuando la orden pasa a En proceso." },
+      { clave: "ORDEN_ESPERA_REPUESTOS", texto: "⏳ Espera repuestos", ayuda: "Cuando la orden pasa a Espera repuestos." },
+      { clave: "ORDEN_REVISADO", texto: "🔬 Revisado", ayuda: "Diagnóstico y costo para que el cliente apruebe." },
+      { clave: "ORDEN_LISTO", texto: "✅ Listo para entrega", ayuda: "El equipo está listo para recoger." },
+      { clave: "ORDEN_ENTREGADO", texto: "📦 Entregado", ayuda: "Agradecimiento al entregar el equipo." },
+      { clave: "ORDEN_ACTUALIZACION", texto: "✏️ Otros cambios", ayuda: "Cuando cambia el costo o el informe sin cambiar el estado." },
+    ],
+  },
+  {
+    titulo: "Reparaciones · mensaje al técnico",
+    plantillas: [{ clave: "ORDEN_TECNICO", texto: "👨‍🔧 Orden asignada", ayuda: "Botón de WhatsApp junto al técnico asignado." }],
+  },
+  {
+    titulo: "Asesorías · mensajes al cliente según el estado",
+    plantillas: [
+      { clave: "ASESORIA_PENDIENTE", texto: "🕒 Registrada (pendiente)", ayuda: "Al registrar la solicitud." },
+      { clave: "ASESORIA_CONFIRMADA", texto: "📅 Confirmada", ayuda: "Con la fecha de visita y el técnico." },
+      { clave: "ASESORIA_REALIZADA", texto: "✅ Realizada", ayuda: "Al terminar la asesoría." },
+      { clave: "ASESORIA_CANCELADA", texto: "✖ Cancelada", ayuda: "Si la asesoría se cancela." },
+    ],
+  },
+  {
+    titulo: "Asesorías · mensaje al técnico",
+    plantillas: [{ clave: "ASESORIA_TECNICO", texto: "👨‍🔧 Asesoría asignada", ayuda: "Botón de WhatsApp junto al técnico asignado." }],
+  },
+];
+
+export const VARIABLES_ORDEN = [
+  "{cliente}",
+  "{equipo}",
+  "{codigo}",
+  "{orden}",
+  "{empresa}",
+  "{estado}",
+  "{costo}",
+  "{informe}",
+  "{fallas}",
+  "{fecha_ingreso}",
+  "{fecha_entrega}",
+  "{valor_revision}",
+  "{tecnico}",
+];
+export const VARIABLES_ASESORIA = [
+  "{cliente}",
+  "{celular}",
+  "{numero}",
+  "{solicitud}",
+  "{detalle}",
+  "{empresa}",
+  "{estado}",
+  "{fecha_visita}",
+  "{tecnico}",
+  "{costo}",
+  "{informe}",
+];
+
+/** Textos de la empresa: los personalizados reemplazan a los originales. */
+export function plantillasDe(personalizadas: unknown): Plantillas {
+  const guardadas = (personalizadas && typeof personalizadas === "object" ? personalizadas : {}) as Partial<Plantillas>;
+  const resultado = { ...PLANTILLAS_DEFECTO };
+  for (const clave of Object.keys(PLANTILLAS_DEFECTO) as ClavePlantilla[]) {
+    const t = guardadas[clave];
+    if (typeof t === "string" && t.trim()) resultado[clave] = t;
+  }
+  return resultado;
 }
 
-export function mensajeAsesoriaTecnico(d: {
-  tecnico: string;
-  numero: number;
-  cliente: string;
-  celular: string;
-  solicitud: string;
-  fallas?: string | null;
-  fechaVisita?: string | null;
-}): string {
-  return [
-    `Hola ${d.tecnico}, tienes asignada la asesoría No. ${d.numero}.`,
-    "",
-    `👤 Cliente: ${d.cliente}`,
-    `📱 Celular: ${d.celular}`,
-    `🛠️ Solicitud: ${d.solicitud}`,
-    d.fallas ? `📝 Detalle: ${d.fallas}` : "",
-    d.fechaVisita ? `📅 Visita: ${d.fechaVisita}` : "📅 Visita: por agendar",
-  ]
-    .filter((l) => l !== "")
-    .join("\n");
+export const clavePorEstadoOrden = (estado: EstadoOrden) => `ORDEN_${estado.replace(/ /g, "_")}` as ClavePlantilla;
+export const clavePorEstadoAsesoria = (estado: EstadoAsesoria) => `ASESORIA_${estado}` as ClavePlantilla;
+
+/**
+ * Reemplaza {variables}. Las líneas con una variable sin valor se quitan
+ * (por ejemplo, "💰 Costo: {costo}" no sale si aún no hay costo).
+ */
+export function aplicarPlantilla(texto: string, valores: Record<string, string | number | null | undefined>): string {
+  const lineas = texto.split("\n").flatMap((linea) => {
+    let vacia = false;
+    const nueva = linea.replace(/\{(\w+)\}/g, (completo, nombre: string) => {
+      if (!(nombre in valores)) return completo;
+      const v = valores[nombre];
+      if (v === null || v === undefined || String(v).trim() === "") {
+        vacia = true;
+        return "";
+      }
+      return String(v);
+    });
+    return vacia ? [] : [nueva];
+  });
+  // Sin líneas en blanco repetidas al quitar
+  return lineas.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
+
+export const pesosCO = (n: number | null | undefined) => (n == null ? null : `$${Math.round(n).toLocaleString("es-CO")}`);
 
 /** dd/mm/aaaa en hora de Colombia */
 export function fechaCorta(valor: string | Date): string {
