@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { ValorCopiable } from "@/components/copiar";
 import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { cantidad, fecha, pesos } from "@/lib/formato";
 import {
@@ -196,6 +197,11 @@ function VistaPreviaCompra({
           valor={pesos(factura.total)}
           detalle={`Subtotal ${pesos(factura.subtotal)} + IVA ${pesos(factura.iva)}`}
         />
+        {factura.cufe && (
+          <div className="sm:col-span-4">
+            <ValorCopiable etiqueta="CUFE" valor={factura.cufe} />
+          </div>
+        )}
       </div>
 
       {vista.duplicada && (

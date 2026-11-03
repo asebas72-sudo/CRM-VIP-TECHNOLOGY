@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ValorCopiable } from "@/components/copiar";
 import { exigirRol } from "@/lib/empresa";
 import { cantidad, fecha, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
@@ -6,6 +7,8 @@ import { crearClienteServidor } from "@/lib/supabase/server";
 type Compra = {
   id: string;
   numero_factura: string;
+  cufe: string | null;
+  origen: string;
   fecha: string;
   total: number;
   proveedores: { nombre: string } | null;
@@ -26,7 +29,7 @@ export default async function PaginaCompras() {
   const { data, error } = await supabase
     .from("compras")
     .select(
-      "id, numero_factura, fecha, total, proveedores (nombre)," +
+      "id, numero_factura, cufe, fecha, total, origen, proveedores (nombre)," +
         " compra_items (id, descripcion, cantidad, costo_unitario, total, productos (codigo, nombre))",
     )
     .eq("empresa_id", activa.id)
@@ -45,12 +48,20 @@ export default async function PaginaCompras() {
             Facturas de proveedores cargadas a <strong>{activa.nombre}</strong>. Clic en una factura para ver sus líneas.
           </p>
         </div>
-        <Link
-          href="/compras/importar"
-          className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
-        >
-          Importar factura XML
-        </Link>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/compras/foto"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Desde foto o manual
+          </Link>
+          <Link
+            href="/compras/importar"
+            className="rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700"
+          >
+            Importar factura XML
+          </Link>
+        </div>
       </div>
 
       {compras.length === 0 ? (
@@ -67,6 +78,9 @@ export default async function PaginaCompras() {
                   <span className="text-slate-400 transition group-open:rotate-90">▶</span>
                   <span className="w-24 text-sm text-slate-600">{fecha(c.fecha)}</span>
                   <span className="w-28 font-semibold text-slate-900">{c.numero_factura}</span>
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                    {c.origen === "xml" ? "XML" : c.origen === "foto" ? "Foto" : "Manual"}
+                  </span>
                   <span className="min-w-40 flex-1 text-slate-700">{c.proveedores?.nombre}</span>
                   <span className="text-sm text-slate-500">
                     {c.compra_items.length} líneas · {cantidad(unidades)} und.
@@ -74,6 +88,11 @@ export default async function PaginaCompras() {
                   <span className="w-32 text-right font-semibold tabular-nums">{pesos(c.total)}</span>
                 </summary>
                 <div className="border-t border-slate-100 px-4 pb-4">
+                  {c.cufe && (
+                    <div className="mt-3">
+                      <ValorCopiable etiqueta="CUFE" valor={c.cufe} />
+                    </div>
+                  )}
                   <div className="overflow-x-auto">
                     <table className="mt-2 w-full text-left text-sm">
                       <thead className="text-slate-500">

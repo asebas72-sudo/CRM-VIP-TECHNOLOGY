@@ -91,7 +91,7 @@ export type DatosVenta = {
   notas: string;
   /** Cliente existente, o datos de uno nuevo; sin ninguno va a CONSUMIDOR FINAL */
   cliente_id: string | null;
-  cliente: { documento: string; nombre: string; telefono: string } | null;
+  cliente: { documento: string; nombre: string; telefono: string; departamento: string; ciudad: string } | null;
 };
 
 export async function registrarVenta(
@@ -114,6 +114,15 @@ export async function registrarVenta(
     p_items: datos.items,
   });
   if (error) return { ok: false, error: error.message };
+
+  // Ubicación del cliente nuevo (la función SQL guarda documento, nombre y teléfono)
+  if (datos.cliente && (datos.cliente.departamento || datos.cliente.ciudad)) {
+    await supabase
+      .from("clientes")
+      .update({ departamento: datos.cliente.departamento || null, ciudad: datos.cliente.ciudad || null })
+      .eq("empresa_id", activa.id)
+      .eq("documento", datos.cliente.documento);
+  }
 
   revalidatePath("/productos");
   revalidatePath("/ventas/historial");

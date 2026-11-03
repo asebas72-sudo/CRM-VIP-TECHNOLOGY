@@ -46,6 +46,12 @@ npm run probar-factura -- ruta/a/factura.xml
 2. Completar las variables `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 3. Cada `push` a `main` se publica automáticamente.
 
+### Lectura de facturas en foto (opcional)
+
+La pantalla **Compras → Desde foto o manual** lee recibos de caja, facturas de papel y cuentas de
+cobro con IA (Claude). Requiere `ANTHROPIC_API_KEY` en `.env.local` y en Render. Sin la clave,
+la misma pantalla permite registrar la compra a mano adjuntando la foto como soporte.
+
 ### 4. cron-job.org
 
 Crear una tarea que visite `https://<su-app>.onrender.com/api/salud` **cada 10 minutos**.

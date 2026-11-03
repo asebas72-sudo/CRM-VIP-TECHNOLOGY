@@ -25,6 +25,7 @@ export async function guardarConfiguracion(_: Resultado, form: FormData): Promis
       direccion: texto(form, "direccion"),
       telefono: texto(form, "telefono"),
       ciudad: texto(form, "ciudad"),
+      departamento: texto(form, "departamento"),
       encabezado_tirilla: texto(form, "encabezado_tirilla"),
       pie_tirilla: texto(form, "pie_tirilla"),
       ancho_tirilla_mm: ancho === 58 ? 58 : 80,

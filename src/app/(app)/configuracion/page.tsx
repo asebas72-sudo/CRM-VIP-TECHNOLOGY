@@ -7,7 +7,7 @@ export default async function PaginaConfiguracion() {
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("empresas")
-    .select("id, nombre, nit, direccion, telefono, ciudad, encabezado_tirilla, pie_tirilla, ancho_tirilla_mm, margen_defecto")
+    .select("id, nombre, nit, direccion, telefono, ciudad, departamento, encabezado_tirilla, pie_tirilla, ancho_tirilla_mm, margen_defecto")
     .eq("id", activa.id)
     .single();
   if (error) throw new Error(error.message);

@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { SelectorUbicacion } from "@/components/selector-ubicacion";
 import { buscarClientes, type ClienteVenta } from "./acciones";
 
 export type SeleccionCliente =
   | { tipo: "generico" }
   | { tipo: "existente"; cliente: ClienteVenta }
-  | { tipo: "nuevo"; documento: string; nombre: string; telefono: string };
+  | { tipo: "nuevo"; documento: string; nombre: string; telefono: string; departamento: string; ciudad: string };
 
 const campo = "w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm";
 
@@ -78,7 +79,7 @@ export function SelectorCliente({
             )}
           </div>
           <button
-            onClick={() => alCambiar({ tipo: "nuevo", documento: texto.match(/^\d+$/) ? texto : "", nombre: texto.match(/^\d+$/) ? "" : texto, telefono: "" })}
+            onClick={() => alCambiar({ tipo: "nuevo", documento: texto.match(/^\d+$/) ? texto : "", nombre: texto.match(/^\d+$/) ? "" : texto, telefono: "", departamento: "", ciudad: "" })}
             className="text-xs font-medium text-blue-700 hover:underline"
           >
             + Crear cliente nuevo
@@ -115,6 +116,13 @@ export function SelectorCliente({
             onChange={(e) => alCambiar({ ...valor, telefono: e.target.value })}
             placeholder="Teléfono"
             className={campo}
+          />
+          <SelectorUbicacion
+            departamento={valor.departamento}
+            ciudad={valor.ciudad}
+            claseCampo={`${campo} mt-0.5`}
+            claseEtiqueta="block text-xs text-slate-500"
+            alCambiar={(u) => alCambiar({ ...valor, ...u })}
           />
         </div>
       )}

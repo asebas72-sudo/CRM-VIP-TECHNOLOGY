@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { exigirRol } from "@/lib/empresa";
 import { cantidad, fecha, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { ValorCopiable } from "@/components/copiar";
 import { EliminarCompra } from "./eliminar";
 
 type Item = {
@@ -25,7 +26,7 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
   const { data: compra } = await supabase
     .from("compras")
     .select(
-      "id, numero_factura, cufe, fecha, subtotal, iva, total, xml_path, pdf_path, creado_en, proveedores (nombre, nit)," +
+      "id, numero_factura, cufe, fecha, subtotal, iva, total, xml_path, pdf_path, soporte_path, origen, creado_en, proveedores (nombre, nit)," +
         " compra_items (id, descripcion, codigo_proveedor, cantidad, costo_unitario, iva_porcentaje, total," +
         " productos (codigo, nombre), seriales (serial, estado))",
     )
@@ -43,6 +44,7 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
     total: number;
     xml_path: string | null;
     pdf_path: string | null;
+    soporte_path: string | null;
     proveedores: { nombre: string; nit: string };
     compra_items: Item[];
   };
@@ -51,6 +53,7 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
     [
       { ruta: c.xml_path, texto: "Descargar XML" },
       { ruta: c.pdf_path, texto: "Ver PDF" },
+      { ruta: c.soporte_path, texto: "Ver soporte (foto/PDF)" },
     ]
       .filter((a) => a.ruta)
       .map(async (a) => {
@@ -90,6 +93,11 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
               ),
           )}
         </div>
+        {c.cufe && (
+          <div className="mt-3 max-w-3xl">
+            <ValorCopiable etiqueta="CUFE" valor={c.cufe} />
+          </div>
+        )}
       </div>
 
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">

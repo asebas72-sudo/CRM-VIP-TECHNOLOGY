@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { botonPrimario, Dialogo } from "@/components/dialogo";
+import { SelectorUbicacion } from "@/components/selector-ubicacion";
 import { guardarConfiguracion, type Resultado } from "./acciones";
 
 export type ConfiguracionEmpresa = {
@@ -10,6 +11,7 @@ export type ConfiguracionEmpresa = {
   direccion: string | null;
   telefono: string | null;
   ciudad: string | null;
+  departamento: string | null;
   encabezado_tirilla: string | null;
   pie_tirilla: string | null;
   ancho_tirilla_mm: number;
@@ -41,10 +43,12 @@ export function FormularioConfiguracion({ empresa }: { empresa: ConfiguracionEmp
             Dirección
             <input name="direccion" defaultValue={empresa.direccion ?? ""} className={campo} />
           </label>
-          <label className={etiqueta}>
-            Ciudad
-            <input name="ciudad" defaultValue={empresa.ciudad ?? ""} className={campo} />
-          </label>
+          <SelectorUbicacion
+            departamento={empresa.departamento}
+            ciudad={empresa.ciudad}
+            claseCampo={campo}
+            claseEtiqueta={etiqueta}
+          />
           <label className={etiqueta}>
             Teléfono
             <input name="telefono" defaultValue={empresa.telefono ?? ""} className={campo} />

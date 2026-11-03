@@ -18,3 +18,5 @@ services:
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
         sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false

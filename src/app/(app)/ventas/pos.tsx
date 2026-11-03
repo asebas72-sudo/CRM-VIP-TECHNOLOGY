@@ -147,7 +147,13 @@ export function PuntoDeVenta() {
       cliente_id: cliente.tipo === "existente" ? cliente.cliente.id : null,
       cliente:
         cliente.tipo === "nuevo"
-          ? { documento: cliente.documento.trim(), nombre: cliente.nombre.trim(), telefono: cliente.telefono.trim() }
+          ? {
+              documento: cliente.documento.trim(),
+              nombre: cliente.nombre.trim(),
+              telefono: cliente.telefono.trim(),
+              departamento: cliente.departamento,
+              ciudad: cliente.ciudad,
+            }
           : null,
     };
     iniciarCobro(async () => {
