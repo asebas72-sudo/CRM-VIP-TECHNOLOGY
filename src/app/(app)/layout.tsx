@@ -1,19 +1,20 @@
 import Link from "next/link";
-import { empresaActiva } from "@/lib/empresa";
+import { NOMBRE_ROL, sesionActual, type Rol } from "@/lib/empresa";
 import { cerrarSesion } from "../login/acciones";
 import { cambiarEmpresa } from "./acciones";
 
-const MENU = [
-  { href: "/", texto: "Inicio" },
-  { href: "/ventas", texto: "Vender" },
-  { href: "/productos", texto: "Productos" },
-  { href: "/compras", texto: "Compras" },
-  { href: "/etiquetas", texto: "Etiquetas QR" },
-  { href: "/configuracion", texto: "Configuración" },
+const MENU: { href: string; texto: string; roles: Rol[] }[] = [
+  { href: "/", texto: "Inicio", roles: ["admin", "bodega", "vendedor"] },
+  { href: "/ventas", texto: "Vender", roles: ["admin", "vendedor"] },
+  { href: "/productos", texto: "Productos", roles: ["admin", "bodega", "vendedor"] },
+  { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
+  { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
+  { href: "/usuarios", texto: "Usuarios", roles: ["admin"] },
+  { href: "/configuracion", texto: "Configuración", roles: ["admin"] },
 ];
 
 export default async function LayoutApp({ children }: LayoutProps<"/">) {
-  const { activa, todas } = await empresaActiva();
+  const { perfil, activa, todas } = await sesionActual();
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row">
@@ -42,7 +43,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
 
         {activa && (
           <nav className="flex gap-1 overflow-x-auto md:flex-col">
-            {MENU.map((item) => (
+            {MENU.filter((item) => item.roles.includes(activa.rol)).map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
@@ -51,15 +52,26 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
                 {item.texto}
               </Link>
             ))}
+            {perfil.acceso_total && (
+              <Link href="/empresas" className="whitespace-nowrap rounded-lg px-3 py-2 text-sm hover:bg-slate-800">
+                Empresas
+              </Link>
+            )}
           </nav>
         )}
 
-        <form action={cerrarSesion} className="md:mt-auto">
-          <button className="text-sm text-slate-400 hover:text-white">Cerrar sesión</button>
-        </form>
+        <div className="text-sm md:mt-auto">
+          <p className="truncate text-slate-300">{perfil.nombre ?? perfil.correo}</p>
+          <p className="text-xs text-slate-500">
+            {perfil.acceso_total ? "Acceso total" : activa ? NOMBRE_ROL[activa.rol] : "Sin acceso"}
+          </p>
+          <form action={cerrarSesion} className="mt-2">
+            <button className="text-slate-400 hover:text-white">Cerrar sesión</button>
+          </form>
+        </div>
       </aside>
 
-      <main className="flex-1 p-4 md:p-8">{children}</main>
+      <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
     </div>
   );
 }

@@ -6,14 +6,14 @@ import { crearEmpresa, type EstadoEmpresa } from "./acciones";
 const campo =
   "mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20";
 
-export function CrearEmpresa() {
+export function CrearEmpresa({ titulo = "Cree su primera empresa" }: { titulo?: string }) {
   const [estado, accion, cargando] = useActionState<EstadoEmpresa, FormData>(crearEmpresa, {});
 
   return (
-    <form action={accion} className="mx-auto mt-10 max-w-md space-y-4 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
+    <form action={accion} className="mx-auto mt-10 w-full max-w-md space-y-4 rounded-2xl bg-white p-6 ring-1 ring-slate-200">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900">Cree su primera empresa</h2>
-        <p className="text-sm text-slate-500">Quedará como administrador y podrá invitar a su equipo.</p>
+        <h2 className="text-lg font-semibold text-slate-900">{titulo}</h2>
+        <p className="text-sm text-slate-500">Luego asigne los usuarios desde el menú Usuarios.</p>
       </div>
       <label className="block text-sm font-medium text-slate-700">
         Nombre de la empresa
