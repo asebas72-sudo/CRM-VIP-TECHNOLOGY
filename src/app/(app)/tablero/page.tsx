@@ -78,7 +78,7 @@ export default async function TableroVentas() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">{activa.nombre}</h1>
-        <p className="text-sm text-slate-500">{perfil.acceso_total ? "Acceso total" : NOMBRE_ROL[activa.rol]}</p>
+        <p className="text-sm text-slate-500">{perfil.acceso_total ? "★ Superadmin" : NOMBRE_ROL[activa.rol]}</p>
       </div>
 
       <TarjetasInicio

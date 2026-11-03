@@ -26,6 +26,7 @@ export type Perfil = {
   correo: string;
   acceso_total: boolean;
   activo: boolean;
+  debe_cambiar_clave?: boolean;
 };
 
 export type Sesion = {
@@ -45,7 +46,7 @@ export async function sesionActual(): Promise<Sesion> {
   if (!usuarioId) redirect("/login");
 
   const [perfilRes, empresasRes, miembrosRes] = await Promise.all([
-    supabase.from("perfiles").select("usuario_id, nombre, correo, acceso_total, activo").eq("usuario_id", usuarioId).single(),
+    supabase.from("perfiles").select("*").eq("usuario_id", usuarioId).single(),
     supabase.from("empresas").select("id, nombre, nit").order("nombre"),
     supabase.from("miembros_empresa").select("empresa_id, rol").eq("usuario_id", usuarioId),
   ]);

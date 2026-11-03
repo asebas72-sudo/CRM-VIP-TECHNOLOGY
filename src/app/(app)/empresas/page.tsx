@@ -24,7 +24,7 @@ export default async function PaginaEmpresas() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Empresas</h1>
-        <p className="text-sm text-slate-500">Solo los usuarios con acceso total ven esta sección.</p>
+        <p className="text-sm text-slate-500">Solo el superadmin ve esta sección.</p>
       </div>
 
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">

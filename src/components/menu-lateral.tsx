@@ -26,7 +26,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
         icono: "⚙️",
         hijos: [
           { href: "/configuracion", texto: "Empresa y tirilla", roles: ["admin"] },
-          { href: "/usuarios", texto: "Usuarios", roles: ["admin"] },
+          { href: "/usuarios", texto: "Usuarios", roles: TODOS, soloAccesoTotal: true },
           { href: "/empresas", texto: "Empresas", roles: TODOS, soloAccesoTotal: true },
         ],
       },
@@ -45,7 +45,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
         hijos: [
           { href: "/servicio/configuracion", texto: "Servicio técnico", roles: ["admin"] },
           { href: "/servicio/configuracion/mensajes", texto: "Mensajes de WhatsApp", roles: ["admin"] },
-          { href: "/servicio/configuracion/usuarios", texto: "Usuarios", roles: ["admin"] },
+          { href: "/servicio/configuracion/usuarios", texto: "Usuarios", roles: TODOS, soloAccesoTotal: true },
           { href: "/servicio/configuracion/empresas", texto: "Empresas", roles: TODOS, soloAccesoTotal: true },
         ],
       },

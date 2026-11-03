@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Marco } from "@/components/marco";
 import { MenuLateral } from "@/components/menu-lateral";
 import { SelectorEmpresa } from "@/components/selector-empresa";
@@ -7,6 +8,8 @@ import { cerrarSesion } from "../login/acciones";
 
 export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const { perfil, activa, todas } = await sesionActual();
+  // Usuario con contraseña temporal: debe cambiarla antes de usar el sistema
+  if (perfil.debe_cambiar_clave) redirect("/cambiar-clave");
 
   const menu = (
     <aside className="flex flex-col gap-4 bg-slate-900 p-4 text-slate-100 md:w-60 print:hidden">
@@ -19,11 +22,16 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
       <div className="text-sm md:mt-auto">
         <p className="truncate text-slate-300">{perfil.nombre ?? perfil.correo}</p>
         <p className="text-xs text-slate-500">
-          {perfil.acceso_total ? "Acceso total" : activa ? NOMBRE_ROL[activa.rol] : "Sin acceso"}
+          {perfil.acceso_total ? "★ Superadmin" : activa ? NOMBRE_ROL[activa.rol] : "Sin acceso"}
         </p>
-        <form action={cerrarSesion} className="mt-2">
-          <button className="text-slate-400 hover:text-white">Cerrar sesión</button>
-        </form>
+        <div className="mt-2 flex flex-col items-start gap-1">
+          <Link href="/cambiar-clave" className="text-slate-400 hover:text-white">
+            Cambiar contraseña
+          </Link>
+          <form action={cerrarSesion}>
+            <button className="text-slate-400 hover:text-white">Cerrar sesión</button>
+          </form>
+        </div>
       </div>
     </aside>
   );

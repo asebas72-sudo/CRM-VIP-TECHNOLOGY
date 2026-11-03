@@ -76,7 +76,7 @@ export default async function SelectorModulo() {
       <Encabezado nombre={nombreCompleto} />
       <div className="mx-auto flex min-h-[80vh] max-w-4xl flex-col justify-center py-6">
         <p className="text-sm text-slate-500">
-          Hola, {nombre} · {activa.nombre} · {perfil.acceso_total ? "Acceso total" : NOMBRE_ROL[activa.rol]}
+          Hola, {nombre} · {activa.nombre} · {perfil.acceso_total ? "★ Superadmin" : NOMBRE_ROL[activa.rol]}
         </p>
         <h1 className="mt-1 text-3xl font-bold text-slate-900">¿Qué vas a hacer?</h1>
 
