@@ -1,0 +1,20 @@
+# Configuración de despliegue en Render (plan gratis).
+# Render > New > Blueprint > seleccione este repositorio.
+services:
+  - type: web
+    name: crm-vip-technology
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    healthCheckPath: /api/salud
+    autoDeployTrigger: commit
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      - key: NEXT_PUBLIC_SUPABASE_URL
+        sync: false
+      - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+        sync: false
