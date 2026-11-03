@@ -372,15 +372,16 @@ export async function guardarConfiguracionServicio(form: FormData): Promise<{ ok
   try {
     const activa = await empresaServicio(texto(form, "empresa_id"));
     if (activa.rol !== "admin") return { ok: false, error: "Solo un administrador puede cambiar la configuración." };
-    const mensajes = JSON.parse(texto(form, "mensajes") || "{}") as Record<string, string>;
-    const valor = Number(digitos(texto(form, "valor_revision")) || 0);
-    const dias = Number(digitos(texto(form, "dias_entrega")) || 8);
+    // Solo se actualiza lo que envía cada pantalla (ajustes generales o mensajes)
+    const cambios: Record<string, unknown> = {};
+    if (form.has("mensajes")) cambios.mensajes_servicio = JSON.parse(texto(form, "mensajes") || "{}");
+    if (form.has("valor_revision")) cambios.valor_revision = Number(digitos(texto(form, "valor_revision")) || 0);
+    if (form.has("dias_entrega")) {
+      cambios.dias_entrega_servicio = Math.min(Math.max(Number(digitos(texto(form, "dias_entrega")) || 8), 1), 90);
+    }
 
     const supabase = await crearClienteServidor();
-    const { error } = await supabase
-      .from("empresas")
-      .update({ mensajes_servicio: mensajes, valor_revision: valor, dias_entrega_servicio: Math.min(Math.max(dias, 1), 90) })
-      .eq("id", activa.id);
+    const { error } = await supabase.from("empresas").update(cambios).eq("id", activa.id);
     if (error) return { ok: false, error: error.message };
     revalidatePath("/servicio", "layout");
     return { ok: true };

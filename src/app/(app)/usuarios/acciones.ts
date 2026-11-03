@@ -27,6 +27,7 @@ export async function agregarUsuario(_: EstadoAgregar, form: FormData): Promise<
   }
 
   revalidatePath("/usuarios");
+  revalidatePath("/servicio/configuracion/usuarios");
   return { mensaje: `Acceso asignado a ${correo} en ${empresas.length} empresa(s).` };
 }
 
@@ -44,6 +45,7 @@ export async function cambiarRol(form: FormData) {
   if (error) throw new Error(error.message);
 
   revalidatePath("/usuarios");
+  revalidatePath("/servicio/configuracion/usuarios");
 }
 
 export async function cambiarAccesoTotal(form: FormData) {
@@ -54,6 +56,7 @@ export async function cambiarAccesoTotal(form: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath("/usuarios");
+  revalidatePath("/servicio/configuracion/usuarios");
 }
 
 export async function cambiarActivo(form: FormData) {
@@ -64,6 +67,7 @@ export async function cambiarActivo(form: FormData) {
   });
   if (error) throw new Error(error.message);
   revalidatePath("/usuarios");
+  revalidatePath("/servicio/configuracion/usuarios");
 }
 
 export async function cambiarCelular(usuarioId: string, celular: string): Promise<{ error?: string }> {
@@ -71,5 +75,6 @@ export async function cambiarCelular(usuarioId: string, celular: string): Promis
   const { error } = await supabase.rpc("definir_celular", { p_usuario: usuarioId, p_celular: celular });
   if (error) return { error: error.message };
   revalidatePath("/usuarios");
+  revalidatePath("/servicio/configuracion/usuarios");
   return {};
 }

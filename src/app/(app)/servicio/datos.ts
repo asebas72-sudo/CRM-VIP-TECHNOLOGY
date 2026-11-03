@@ -1,4 +1,5 @@
 import "server-only";
+import { redirect } from "next/navigation";
 import { MODULOS_POR_ROL, sesionActual, type Rol } from "@/lib/empresa";
 import { plantillasDe, type Plantillas } from "@/lib/servicio";
 import { crearClienteServidor } from "@/lib/supabase/server";
@@ -75,4 +76,17 @@ export async function urlsFirmadas(rutas: (string | null | undefined)[]): Promis
   const pares: [string, string][] = [];
   for (const d of data ?? []) if (d.path && d.signedUrl) pares.push([d.path, d.signedUrl]);
   return new Map(pares);
+}
+
+/** Empresas que el usuario administra, con sus ajustes de servicio técnico (pantallas de configuración). */
+export async function empresasConfigurables() {
+  const empresas = (await empresasServicio()).filter((e) => e.rol === "admin");
+  if (empresas.length === 0) redirect("/servicio");
+  return empresas.map((e) => ({
+    id: e.id,
+    nombre: e.nombre,
+    valorRevision: e.valorRevision,
+    diasEntrega: e.diasEntrega,
+    plantillas: e.plantillas,
+  }));
 }
