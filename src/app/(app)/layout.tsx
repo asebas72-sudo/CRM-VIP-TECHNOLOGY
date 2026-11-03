@@ -17,8 +17,8 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   const { perfil, activa, todas } = await sesionActual();
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row">
-      <aside className="flex flex-col gap-4 bg-slate-900 p-4 text-slate-100 md:w-60">
+    <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row print:block print:bg-white">
+      <aside className="flex flex-col gap-4 bg-slate-900 p-4 text-slate-100 md:w-60 print:hidden">
         <div>
           <p className="text-lg font-bold">CRM VIP</p>
           {activa && todas.length > 1 ? (
@@ -71,7 +71,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 p-4 md:p-8">{children}</main>
+      <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
     </div>
   );
 }

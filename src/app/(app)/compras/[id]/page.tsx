@@ -77,7 +77,10 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
           </div>
           {activa.rol === "admin" && <EliminarCompra compraId={id} numero={c.numero_factura} empresa={activa.nombre} />}
         </div>
-        <div className="mt-2 flex gap-3">
+        <div className="mt-2 flex flex-wrap gap-3">
+          <Link href={`/etiquetas?compra=${id}`} className="text-sm font-medium text-blue-700 hover:underline">
+            Imprimir etiquetas QR de esta compra
+          </Link>
           {archivos.map(
             (a) =>
               a.url && (

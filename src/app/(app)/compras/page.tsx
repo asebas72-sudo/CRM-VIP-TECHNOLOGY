@@ -1,7 +1,23 @@
 import Link from "next/link";
 import { exigirRol } from "@/lib/empresa";
-import { fecha, pesos } from "@/lib/formato";
+import { cantidad, fecha, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
+
+type Compra = {
+  id: string;
+  numero_factura: string;
+  fecha: string;
+  total: number;
+  proveedores: { nombre: string } | null;
+  compra_items: {
+    id: string;
+    descripcion: string;
+    cantidad: number;
+    costo_unitario: number;
+    total: number;
+    productos: { codigo: string; nombre: string } | null;
+  }[];
+};
 
 export default async function PaginaCompras() {
   const { activa } = await exigirRol("admin", "bodega");
@@ -9,19 +25,25 @@ export default async function PaginaCompras() {
 
   const { data, error } = await supabase
     .from("compras")
-    .select("id, numero_factura, fecha, total, proveedores (nombre), compra_items (count)")
+    .select(
+      "id, numero_factura, fecha, total, proveedores (nombre)," +
+        " compra_items (id, descripcion, cantidad, costo_unitario, total, productos (codigo, nombre))",
+    )
     .eq("empresa_id", activa.id)
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false })
     .limit(200);
   if (error) throw new Error(error.message);
+  const compras = (data ?? []) as unknown as Compra[];
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Compras</h1>
-          <p className="text-sm text-slate-500">Facturas de proveedores cargadas al inventario.</p>
+          <p className="text-sm text-slate-500">
+            Facturas de proveedores cargadas a <strong>{activa.nombre}</strong>. Clic en una factura para ver sus líneas.
+          </p>
         </div>
         <Link
           href="/compras/importar"
@@ -31,42 +53,58 @@ export default async function PaginaCompras() {
         </Link>
       </div>
 
-      {(data ?? []).length === 0 ? (
+      {compras.length === 0 ? (
         <p className="rounded-2xl bg-white p-8 text-center text-slate-500 ring-1 ring-slate-200">
           Aún no hay compras. Importe la primera factura XML.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
-              <tr>
-                <th className="px-4 py-3 font-medium">Fecha</th>
-                <th className="px-4 py-3 font-medium">Factura</th>
-                <th className="px-4 py-3 font-medium">Proveedor</th>
-                <th className="px-4 py-3 text-right font-medium">Líneas</th>
-                <th className="px-4 py-3 text-right font-medium">Total</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {(data ?? []).map((c) => {
-                const proveedor = Array.isArray(c.proveedores) ? c.proveedores[0] : c.proveedores;
-                const lineas = (c.compra_items as unknown as { count: number }[])[0]?.count ?? 0;
-                return (
-                  <tr key={c.id} className="hover:bg-slate-50">
-                    <td className="px-4 py-3 text-slate-600">{fecha(c.fecha)}</td>
-                    <td className="px-4 py-3">
-                      <Link href={`/compras/${c.id}`} className="font-medium text-blue-700 hover:underline">
-                        {c.numero_factura}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-3 text-slate-900">{proveedor?.nombre}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{lineas}</td>
-                    <td className="px-4 py-3 text-right font-medium tabular-nums">{pesos(c.total)}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+        <div className="space-y-2">
+          {compras.map((c) => {
+            const unidades = c.compra_items.reduce((s, i) => s + Number(i.cantidad), 0);
+            return (
+              <details key={c.id} className="group rounded-2xl bg-white ring-1 ring-slate-200">
+                <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-1 px-4 py-3 hover:bg-slate-50">
+                  <span className="text-slate-400 transition group-open:rotate-90">▶</span>
+                  <span className="w-24 text-sm text-slate-600">{fecha(c.fecha)}</span>
+                  <span className="w-28 font-semibold text-slate-900">{c.numero_factura}</span>
+                  <span className="min-w-40 flex-1 text-slate-700">{c.proveedores?.nombre}</span>
+                  <span className="text-sm text-slate-500">
+                    {c.compra_items.length} líneas · {cantidad(unidades)} und.
+                  </span>
+                  <span className="w-32 text-right font-semibold tabular-nums">{pesos(c.total)}</span>
+                </summary>
+                <div className="border-t border-slate-100 px-4 pb-4">
+                  <div className="overflow-x-auto">
+                    <table className="mt-2 w-full text-left text-sm">
+                      <thead className="text-slate-500">
+                        <tr>
+                          <th className="py-2 pr-3 font-medium">Código</th>
+                          <th className="py-2 pr-3 font-medium">Producto</th>
+                          <th className="py-2 pr-3 text-right font-medium">Cant.</th>
+                          <th className="py-2 pr-3 text-right font-medium">Costo u.</th>
+                          <th className="py-2 text-right font-medium">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {c.compra_items.map((i) => (
+                          <tr key={i.id}>
+                            <td className="py-1.5 pr-3 font-mono text-xs text-slate-600">{i.productos?.codigo}</td>
+                            <td className="py-1.5 pr-3 text-slate-900">{i.productos?.nombre ?? i.descripcion}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">{cantidad(i.cantidad)}</td>
+                            <td className="py-1.5 pr-3 text-right tabular-nums">{pesos(i.costo_unitario)}</td>
+                            <td className="py-1.5 text-right tabular-nums">{pesos(i.total)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <Link href={`/compras/${c.id}`} className="mt-3 inline-block text-sm font-medium text-blue-700 hover:underline">
+                    Ver detalle completo (seriales, XML, PDF) →
+                  </Link>
+                </div>
+              </details>
+            );
+          })}
         </div>
       )}
     </div>
