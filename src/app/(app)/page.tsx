@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { NOMBRE_ROL, sesionActual } from "@/lib/empresa";
-import { cantidad, pesos } from "@/lib/formato";
+import { cantidad } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { CrearEmpresa } from "./crear-empresa";
+import { TarjetasInicio, type ProductoInicio, type VentaHoy } from "./tarjetas-inicio";
 
 export default async function Inicio() {
   const { perfil, activa } = await sesionActual();
@@ -26,36 +27,45 @@ export default async function Inicio() {
   const [ventasRes, productosRes] = await Promise.all([
     supabase
       .from("ventas")
-      .select("total")
+      .select("id, consecutivo, fecha, total, saldo, tipo, forma_pago, clientes (nombre)")
       .eq("empresa_id", activa.id)
       .eq("estado", "pagada")
-      .gte("fecha", `${hoy}T00:00:00-05:00`),
+      .gte("fecha", `${hoy}T00:00:00-05:00`)
+      .order("consecutivo", { ascending: false }),
     supabase
       .from("productos")
-      .select("id, nombre, codigo, stock, stock_minimo, costo_promedio")
+      .select("id, nombre, codigo, stock, stock_minimo, costo_promedio, precio_venta")
       .eq("empresa_id", activa.id)
-      .eq("activo", true),
+      .eq("activo", true)
+      .order("nombre"),
   ]);
 
-  const ventasHoy = ventasRes.data ?? [];
-  const productos = productosRes.data ?? [];
+  const ventasHoy: VentaHoy[] = (ventasRes.data ?? []).map((v) => {
+    const cliente = (Array.isArray(v.clientes) ? v.clientes[0] : v.clientes) as { nombre: string } | null;
+    return {
+      id: v.id,
+      consecutivo: v.consecutivo,
+      fecha: v.fecha,
+      total: Number(v.total),
+      saldo: Number(v.saldo),
+      tipo: v.tipo,
+      forma_pago: v.forma_pago,
+      cliente: cliente?.nombre ?? "—",
+    };
+  });
+  const productos: ProductoInicio[] = (productosRes.data ?? []).map((p) => ({
+    id: p.id,
+    codigo: p.codigo,
+    nombre: p.nombre,
+    stock: Number(p.stock),
+    stock_minimo: Number(p.stock_minimo),
+    costo_promedio: Number(p.costo_promedio),
+    precio_venta: Number(p.precio_venta),
+  }));
   const alertas = productos
     .filter((p) => p.stock <= 0 || (p.stock_minimo > 0 && p.stock <= p.stock_minimo))
     .sort((a, b) => a.stock - b.stock);
   const verCostos = activa.rol !== "vendedor";
-
-  const tarjetas = [
-    { titulo: "Ventas de hoy", valor: pesos(ventasHoy.reduce((s, v) => s + Number(v.total), 0)), detalle: `${ventasHoy.length} venta(s)` },
-    { titulo: "Productos activos", valor: String(productos.length) },
-    {
-      titulo: "Unidades en inventario",
-      valor: cantidad(productos.reduce((s, p) => s + Math.max(Number(p.stock), 0), 0)),
-      detalle: verCostos
-        ? `Al costo ${pesos(productos.reduce((s, p) => s + Math.max(Number(p.stock), 0) * Number(p.costo_promedio), 0))}`
-        : undefined,
-    },
-    { titulo: "Alertas de stock", valor: String(alertas.length), detalle: "Sin existencias o bajo mínimo" },
-  ];
 
   const accesos = [
     { href: "/ventas", texto: "Vender", roles: ["admin", "vendedor"] },
@@ -71,15 +81,12 @@ export default async function Inicio() {
         <p className="text-sm text-slate-500">{perfil.acceso_total ? "Acceso total" : NOMBRE_ROL[activa.rol]}</p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {tarjetas.map((t) => (
-          <div key={t.titulo} className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-            <p className="text-sm text-slate-500">{t.titulo}</p>
-            <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">{t.valor}</p>
-            {t.detalle && <p className="text-xs text-slate-500">{t.detalle}</p>}
-          </div>
-        ))}
-      </div>
+      <TarjetasInicio
+        ventas={ventasHoy}
+        productos={productos}
+        verCostos={verCostos}
+        puedeVender={activa.rol !== "bodega"}
+      />
 
       <div className="flex flex-wrap gap-2">
         {accesos.map((a) => (
