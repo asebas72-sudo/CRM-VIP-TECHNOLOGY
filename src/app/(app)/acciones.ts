@@ -36,5 +36,7 @@ export async function actualizarEmpresa(form: FormData) {
 export async function cambiarEmpresa(form: FormData) {
   const id = String(form.get("empresa_id") ?? "");
   (await cookies()).set(COOKIE_EMPRESA, id, { path: "/", sameSite: "lax" });
-  redirect("/");
+  // Vuelve a la misma sección (solo rutas internas)
+  const volver = String(form.get("volver") ?? "/");
+  redirect(/^\/[a-z-]*$/.test(volver) ? volver : "/");
 }

@@ -10,7 +10,9 @@ import {
   serialesDisponibles,
   type DatosVenta,
   type ProductoVenta,
+  type TipoVenta,
 } from "./acciones";
+import { clienteCompleto, SelectorCliente, type SeleccionCliente } from "./cliente";
 
 type Linea = {
   producto: ProductoVenta;
@@ -24,6 +26,12 @@ const FORMAS: { valor: DatosVenta["forma_pago"]; texto: string }[] = [
   { valor: "tarjeta", texto: "Tarjeta" },
   { valor: "transferencia", texto: "Transferencia" },
   { valor: "mixto", texto: "Mixto" },
+];
+
+const TIPOS: { valor: TipoVenta; texto: string; ayuda: string }[] = [
+  { valor: "contado", texto: "Contado", ayuda: "Paga todo ahora" },
+  { valor: "credito", texto: "Crédito", ayuda: "Se lleva el producto y paga después" },
+  { valor: "separado", texto: "Separado", ayuda: "Abona y se entrega al pagar todo" },
 ];
 
 const entero = (v: string) => Number(v.replace(/\D/g, "")) || 0;
@@ -40,9 +48,10 @@ export function PuntoDeVenta() {
 
   const [lineas, setLineas] = useState<Linea[]>([]);
   const [forma, setForma] = useState<DatosVenta["forma_pago"]>("efectivo");
-  const [recibido, setRecibido] = useState("");
-  const [cliente, setCliente] = useState({ documento: "", nombre: "", telefono: "" });
-  const [verCliente, setVerCliente] = useState(false);
+  const [tipo, setTipo] = useState<TipoVenta>("contado");
+  const [abono, setAbono] = useState("");
+  const [vence, setVence] = useState("");
+  const [cliente, setCliente] = useState<SeleccionCliente>({ tipo: "generico" });
   const [notas, setNotas] = useState("");
 
   const [eligiendoSerial, setEligiendoSerial] = useState<{
@@ -50,13 +59,15 @@ export function PuntoDeVenta() {
     disponibles: { id: string; serial: string }[];
   } | null>(null);
   const [error, setError] = useState<string>();
-  const [ventaLista, setVentaLista] = useState<string | null>(null);
+  const [ventaLista, setVentaLista] = useState<{ id: string; total: number; saldo: number } | null>(null);
   const [cobrando, iniciarCobro] = useTransition();
 
   const total = lineas.reduce((s, l) => s + l.producto.precio_venta * l.cantidad - l.descuento, 0);
   const unidades = lineas.reduce((s, l) => s + l.cantidad, 0);
-  const recibidoNum = entero(recibido);
-  const cambio = forma === "efectivo" && recibidoNum > 0 ? recibidoNum - total : null;
+  const abonoNum = tipo === "contado" ? total : Math.min(entero(abono), total);
+  const saldo = total - abonoNum;
+  const aCredito = tipo !== "contado";
+  const clienteValido = clienteCompleto(cliente) && (!aCredito || cliente.tipo !== "generico");
   const faltanSeriales = lineas.some((l) => l.producto.maneja_serial && l.seriales.length !== l.cantidad);
   const sinStock = lineas.some((l) => l.cantidad > l.producto.stock);
 
@@ -128,25 +139,32 @@ export function PuntoDeVenta() {
         descuento: l.descuento,
         serial_ids: l.seriales.map((s) => s.id),
       })),
+      tipo,
       forma_pago: forma,
-      recibido: forma === "efectivo" && recibidoNum > 0 ? recibidoNum : null,
+      abono_inicial: aCredito ? abonoNum : 0,
+      fecha_vencimiento: aCredito && vence ? vence : null,
       notas,
-      cliente: cliente.documento || cliente.nombre ? cliente : null,
+      cliente_id: cliente.tipo === "existente" ? cliente.cliente.id : null,
+      cliente:
+        cliente.tipo === "nuevo"
+          ? { documento: cliente.documento.trim(), nombre: cliente.nombre.trim(), telefono: cliente.telefono.trim() }
+          : null,
     };
     iniciarCobro(async () => {
       const r = await registrarVenta(datos);
-      if (r.ok) setVentaLista(r.ventaId);
+      if (r.ok) setVentaLista({ id: r.ventaId, total, saldo });
       else setError(r.error);
     });
   }
 
   function nuevaVenta() {
     setLineas([]);
-    setRecibido("");
-    setCliente({ documento: "", nombre: "", telefono: "" });
-    setVerCliente(false);
+    setCliente({ tipo: "generico" });
     setNotas("");
     setForma("efectivo");
+    setTipo("contado");
+    setAbono("");
+    setVence("");
     setVentaLista(null);
     enfocar();
   }
@@ -301,71 +319,96 @@ export function PuntoDeVenta() {
           <p className="text-xs text-slate-500">IVA incluido</p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          {FORMAS.map((f) => (
+        <div className="grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1">
+          {TIPOS.map((t) => (
             <button
-              key={f.valor}
-              onClick={() => setForma(f.valor)}
-              className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-                forma === f.valor ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              key={t.valor}
+              onClick={() => setTipo(t.valor)}
+              title={t.ayuda}
+              className={`rounded-md px-2 py-1.5 text-sm font-semibold ${
+                tipo === t.valor ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
               }`}
             >
-              {f.texto}
+              {t.texto}
             </button>
           ))}
         </div>
+        <p className="-mt-2 text-xs text-slate-500">{TIPOS.find((t) => t.valor === tipo)?.ayuda}</p>
 
-        {forma === "efectivo" && (
-          <div>
+        <SelectorCliente valor={cliente} alCambiar={setCliente} requiereIdentificado={aCredito} />
+
+        {aCredito && (
+          <div className="grid grid-cols-2 gap-2">
             <label className="block text-sm font-medium text-slate-700">
-              Recibido
+              {tipo === "separado" ? "Abono hoy" : "Cuota inicial"}
               <input
-                value={recibido ? Number(entero(recibido)).toLocaleString("es-CO") : ""}
-                onChange={(e) => setRecibido(e.target.value)}
+                value={abono ? entero(abono).toLocaleString("es-CO") : ""}
+                onChange={(e) => setAbono(e.target.value)}
                 inputMode="numeric"
                 placeholder="0"
-                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-right text-lg tabular-nums"
+                className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-1.5 text-right tabular-nums"
               />
             </label>
-            {cambio !== null && (
-              <p className={`mt-1 text-right text-lg font-semibold ${cambio < 0 ? "text-red-600" : "text-green-700"}`}>
-                {cambio < 0 ? `Faltan ${pesos(-cambio)}` : `Cambio ${pesos(cambio)}`}
-              </p>
-            )}
+            <label className="block text-sm font-medium text-slate-700">
+              Pagar antes de
+              <input
+                type="date"
+                value={vence}
+                onChange={(e) => setVence(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5"
+              />
+            </label>
+            <p className="col-span-2 text-right text-sm">
+              Saldo pendiente: <strong className="text-red-600 tabular-nums">{pesos(saldo)}</strong>
+            </p>
           </div>
         )}
 
-        <div>
-          <button onClick={() => setVerCliente(!verCliente)} className="text-sm font-medium text-blue-700 hover:underline">
-            {verCliente ? "− Ocultar cliente" : "+ Agregar cliente (opcional)"}
-          </button>
-          {verCliente && (
-            <div className="mt-2 space-y-2">
-              {(["documento", "nombre", "telefono"] as const).map((campo) => (
-                <input
-                  key={campo}
-                  value={cliente[campo]}
-                  onChange={(e) => setCliente({ ...cliente, [campo]: e.target.value })}
-                  placeholder={{ documento: "Cédula / NIT", nombre: "Nombre", telefono: "Teléfono" }[campo]}
-                  className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-                />
+        {(!aCredito || abonoNum > 0) && (
+          <div>
+            <p className="mb-1 text-sm font-medium text-slate-700">Forma de pago</p>
+            <div className="grid grid-cols-2 gap-2">
+              {FORMAS.map((f) => (
+                <button
+                  key={f.valor}
+                  onClick={() => setForma(f.valor)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+                    forma === f.valor ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {f.texto}
+                </button>
               ))}
-              <input
-                value={notas}
-                onChange={(e) => setNotas(e.target.value)}
-                placeholder="Nota de la venta"
-                className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
-              />
             </div>
-          )}
-        </div>
+          </div>
+        )}
+
+        <input
+          value={notas}
+          onChange={(e) => setNotas(e.target.value)}
+          placeholder="Nota de la venta (opcional)"
+          className="w-full rounded-lg border border-slate-300 px-3 py-1.5 text-sm"
+        />
 
         <button
           onClick={cobrar}
-          disabled={lineas.length === 0 || cobrando || faltanSeriales || sinStock || (cambio !== null && cambio < 0)}
+          disabled={
+            lineas.length === 0 ||
+            cobrando ||
+            faltanSeriales ||
+            sinStock ||
+            !clienteValido ||
+            (tipo === "separado" && saldo <= 0)
+          }
           className={`${botonExito} w-full py-3 text-lg`}
         >
-          {cobrando ? "Registrando..." : "Cobrar"}
+          {cobrando
+            ? "Registrando..."
+            : tipo === "contado"
+              ? "Cobrar"
+              : tipo === "credito"
+                ? "Registrar crédito"
+                : "Registrar separado"}
         </button>
         {faltanSeriales && <p className="text-xs text-amber-700">Seleccione los seriales de los productos marcados.</p>}
         {lineas.length > 0 && (
@@ -414,18 +457,18 @@ export function PuntoDeVenta() {
             <button className={botonSecundario} onClick={nuevaVenta}>
               Nueva venta
             </button>
-            <button className={botonPrimario} onClick={() => router.push(`/ventas/${ventaLista}?imprimir=1`)}>
+            <button className={botonPrimario} onClick={() => router.push(`/ventas/${ventaLista?.id}?imprimir=1`)}>
               Imprimir tirilla
             </button>
           </>
         }
       >
         <p>
-          Total <strong>{pesos(total)}</strong>
-          {cambio !== null && cambio >= 0 && (
+          Total <strong>{pesos(ventaLista?.total ?? 0)}</strong>
+          {ventaLista && ventaLista.saldo > 0 && (
             <>
               {" "}
-              · cambio <strong>{pesos(cambio)}</strong>
+              · saldo pendiente <strong className="text-red-600">{pesos(ventaLista.saldo)}</strong>
             </>
           )}
           .

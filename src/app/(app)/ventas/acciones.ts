@@ -60,11 +60,37 @@ export async function serialesDisponibles(productoId: string): Promise<{ id: str
   return data ?? [];
 }
 
+export type ClienteVenta = { id: string; documento: string | null; nombre: string; telefono: string | null };
+
+/** Clientes por documento o nombre, para elegir al vender. */
+export async function buscarClientes(texto: string): Promise<ClienteVenta[]> {
+  const { activa } = await exigirRol("admin", "vendedor");
+  const q = texto.trim().replace(/[,()%*]/g, " ");
+  if (q.length < 2) return [];
+  const supabase = await crearClienteServidor();
+  const { data } = await supabase
+    .from("clientes")
+    .select("id, documento, nombre, telefono")
+    .eq("empresa_id", activa.id)
+    .or("documento.is.null,documento.neq.222222222222")
+    .or(`nombre.ilike.%${q}%,documento.ilike.%${q}%`)
+    .order("nombre")
+    .limit(10);
+  return data ?? [];
+}
+
+export type TipoVenta = "contado" | "credito" | "separado";
+
 export type DatosVenta = {
   items: { producto_id: string; cantidad: number; descuento: number; serial_ids: string[] }[];
+  tipo: TipoVenta;
   forma_pago: "efectivo" | "tarjeta" | "transferencia" | "mixto";
-  recibido: number | null;
+  /** Solo crédito y separado: lo que paga hoy (puede ser 0) */
+  abono_inicial: number;
+  fecha_vencimiento: string | null;
   notas: string;
+  /** Cliente existente, o datos de uno nuevo; sin ninguno va a CONSUMIDOR FINAL */
+  cliente_id: string | null;
   cliente: { documento: string; nombre: string; telefono: string } | null;
 };
 
@@ -77,9 +103,12 @@ export async function registrarVenta(
   const { data, error } = await supabase.rpc("registrar_venta", {
     p_empresa: activa.id,
     p_venta: {
+      tipo: datos.tipo,
       forma_pago: datos.forma_pago,
-      recibido: datos.recibido,
+      abono_inicial: datos.abono_inicial,
+      fecha_vencimiento: datos.fecha_vencimiento,
       notas: datos.notas,
+      cliente_id: datos.cliente_id,
       cliente: datos.cliente,
     },
     p_items: datos.items,
@@ -88,6 +117,7 @@ export async function registrarVenta(
 
   revalidatePath("/productos");
   revalidatePath("/ventas/historial");
+  revalidatePath("/cartera");
   return { ok: true, ventaId: data as string };
 }
 
@@ -98,5 +128,35 @@ export async function anularVenta(ventaId: string, motivo: string): Promise<{ er
   if (error) return { error: error.message };
   revalidatePath(`/ventas/${ventaId}`);
   revalidatePath("/ventas/historial");
+  return {};
+}
+
+export async function registrarAbono(
+  ventaId: string,
+  valor: number,
+  forma: DatosVenta["forma_pago"],
+  nota: string,
+): Promise<{ error?: string; saldo?: number }> {
+  await exigirRol("admin", "vendedor");
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase.rpc("registrar_abono", {
+    p_venta: ventaId,
+    p_valor: valor,
+    p_forma: forma,
+    p_nota: nota,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/ventas/${ventaId}`);
+  revalidatePath("/cartera");
+  return { saldo: Number(data) };
+}
+
+export async function entregarVenta(ventaId: string): Promise<{ error?: string }> {
+  await sesionActual();
+  const supabase = await crearClienteServidor();
+  const { error } = await supabase.rpc("entregar_venta", { p_venta: ventaId });
+  if (error) return { error: error.message };
+  revalidatePath(`/ventas/${ventaId}`);
+  revalidatePath("/cartera");
   return {};
 }

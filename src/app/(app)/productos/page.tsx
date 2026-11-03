@@ -4,6 +4,7 @@ import { cantidad, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { margen } from "@/lib/precios";
 import { EditorPrecio } from "./precio";
+import { StockPorEmpresa } from "./stock-por-empresa";
 
 type Producto = {
   id: string;
@@ -29,12 +30,57 @@ const FILTROS = [
 ];
 
 export default async function PaginaProductos({ searchParams }: PageProps<"/productos">) {
-  const { activa } = await sesionActual();
+  const { activa, todas } = await sesionActual();
   if (!activa) return null;
   const parametros = await searchParams;
   const q = String(parametros.q ?? "").trim();
   const filtro = String(parametros.filtro ?? "");
+  const vistaTodas = parametros.vista === "todas" && todas.length > 1;
   const puedeEditar = activa.rol === "admin" || activa.rol === "bodega";
+
+  const pestanas =
+    todas.length > 1 ? (
+      <div className="flex gap-1 rounded-lg bg-slate-200 p-1 text-sm">
+        <Link
+          href={`/productos${q ? `?q=${encodeURIComponent(q)}` : ""}`}
+          className={`rounded-md px-3 py-1.5 font-semibold ${vistaTodas ? "text-slate-600" : "bg-white text-slate-900 shadow-sm"}`}
+        >
+          {activa.nombre}
+        </Link>
+        <Link
+          href={`/productos?vista=todas${q ? `&q=${encodeURIComponent(q)}` : ""}`}
+          className={`rounded-md px-3 py-1.5 font-semibold ${vistaTodas ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}
+        >
+          Stock en todas las empresas
+        </Link>
+      </div>
+    ) : null;
+
+  if (vistaTodas) {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Productos</h1>
+            <p className="text-sm text-slate-500">Existencias de cada producto (por código) en cada empresa.</p>
+          </div>
+          {pestanas}
+        </div>
+        <form className="flex flex-wrap gap-2">
+          <input type="hidden" name="vista" value="todas" />
+          <input
+            name="q"
+            defaultValue={q}
+            autoFocus
+            placeholder="Buscar o escanear código..."
+            className="min-w-64 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2"
+          />
+          <button className="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white">Buscar</button>
+        </form>
+        <StockPorEmpresa empresas={todas.map((e) => ({ id: e.id, nombre: e.nombre }))} q={q} />
+      </div>
+    );
+  }
 
   const supabase = await crearClienteServidor();
   let consulta = supabase
@@ -69,13 +115,16 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">Productos</h1>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+        <h1 className="text-2xl font-bold text-slate-900">Productos de {activa.nombre}</h1>
         <p className="text-sm text-slate-500">
           {productos.length} producto(s)
           {puedeEditar && ` · inventario al costo ${pesos(valorInventario)}`}
           {puedeEditar && " · edite el precio y presione Guardar o Enter"}
         </p>
+        </div>
+        {pestanas}
       </div>
 
       <form className="flex flex-wrap gap-2">

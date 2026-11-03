@@ -1,11 +1,12 @@
 import Link from "next/link";
+import { SelectorEmpresa } from "@/components/selector-empresa";
 import { NOMBRE_ROL, sesionActual, type Rol } from "@/lib/empresa";
 import { cerrarSesion } from "../login/acciones";
-import { cambiarEmpresa } from "./acciones";
 
 const MENU: { href: string; texto: string; roles: Rol[] }[] = [
   { href: "/", texto: "Inicio", roles: ["admin", "bodega", "vendedor"] },
   { href: "/ventas", texto: "Vender", roles: ["admin", "vendedor"] },
+  { href: "/cartera", texto: "Cartera y abonos", roles: ["admin", "vendedor"] },
   { href: "/productos", texto: "Productos", roles: ["admin", "bodega", "vendedor"] },
   { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
   { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
@@ -19,27 +20,7 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
   return (
     <div className="flex min-h-screen flex-col bg-slate-100 md:flex-row print:block print:bg-white">
       <aside className="flex flex-col gap-4 bg-slate-900 p-4 text-slate-100 md:w-60 print:hidden">
-        <div>
-          <p className="text-lg font-bold">CRM VIP</p>
-          {activa && todas.length > 1 ? (
-            <form action={cambiarEmpresa} className="mt-2">
-              <select
-                name="empresa_id"
-                defaultValue={activa.id}
-                className="w-full rounded bg-slate-800 px-2 py-1 text-sm"
-              >
-                {todas.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.nombre}
-                  </option>
-                ))}
-              </select>
-              <button className="mt-1 text-xs text-slate-400 hover:text-white">Cambiar empresa</button>
-            </form>
-          ) : (
-            <p className="text-sm text-slate-400">{activa?.nombre ?? "Sin empresa"}</p>
-          )}
-        </div>
+        <p className="text-lg font-bold">CRM VIP</p>
 
         {activa && (
           <nav className="flex gap-1 overflow-x-auto md:flex-col">
@@ -71,7 +52,17 @@ export default async function LayoutApp({ children }: LayoutProps<"/">) {
         </div>
       </aside>
 
-      <main className="min-w-0 flex-1 p-4 md:p-8 print:p-0">{children}</main>
+      <div className="min-w-0 flex-1">
+        {activa && (
+          <header className="sticky top-0 z-20 flex items-center justify-between gap-3 border-b border-slate-200 bg-white/95 px-4 py-2 backdrop-blur md:px-8 print:hidden">
+            <SelectorEmpresa empresas={todas.map((e) => ({ id: e.id, nombre: e.nombre }))} activa={activa.id} />
+            <span className="hidden text-xs text-slate-500 sm:block">
+              {NOMBRE_ROL[activa.rol]} en esta empresa
+            </span>
+          </header>
+        )}
+        <main className="p-4 md:p-8 print:p-0">{children}</main>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,10 @@ import { notFound } from "next/navigation";
 import { sesionActual } from "@/lib/empresa";
 import { cantidad, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { BotonAbonar, BotonEntregar } from "../abono";
 import { AccionesVenta } from "./acciones-venta";
+
+const TIPO: Record<string, string> = { contado: "Contado", credito: "Crédito", separado: "Separado" };
 
 const FORMA: Record<string, string> = {
   efectivo: "Efectivo",
@@ -24,6 +27,12 @@ type Venta = {
   recibido: number | null;
   cambio: number | null;
   estado: "pagada" | "anulada";
+  tipo: "contado" | "credito" | "separado";
+  abonado: number;
+  saldo: number;
+  fecha_vencimiento: string | null;
+  entregada: boolean;
+  pagos: { id: string; valor: number; forma_pago: string; fecha: string; nota: string | null }[];
   notas: string | null;
   vendedor_id: string | null;
   clientes: { documento: string | null; nombre: string; telefono: string | null } | null;
@@ -51,6 +60,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
       .from("ventas")
       .select(
         "id, consecutivo, fecha, subtotal, descuento, iva, total, forma_pago, recibido, cambio, estado, notas, vendedor_id," +
+          " tipo, abonado, saldo, fecha_vencimiento, entregada, pagos (id, valor, forma_pago, fecha, nota)," +
           " clientes (documento, nombre, telefono)," +
           " venta_items (id, descripcion, cantidad, precio_unitario, descuento, total, productos (codigo), seriales (serial))",
       )
@@ -72,6 +82,8 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
     : { data: null };
 
   const ancho = e.ancho_tirilla_mm === 58 ? 58 : 80;
+  const pagos = [...v.pagos].sort((a, b) => a.fecha.localeCompare(b.fecha));
+  const vigente = v.estado === "pagada";
 
   return (
     <div className="space-y-6">
@@ -88,7 +100,29 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
               <span className="ml-3 rounded-full bg-red-100 px-3 py-1 align-middle text-sm text-red-700">Anulada</span>
             )}
           </h1>
-          <p className="text-sm text-slate-500">{new Date(v.fecha).toLocaleString("es-CO")}</p>
+          <p className="text-sm text-slate-500">
+            {TIPO[v.tipo]} · {new Date(v.fecha).toLocaleString("es-CO")}
+            {v.clientes && ` · ${v.clientes.nombre}`}
+          </p>
+          {v.tipo !== "contado" && vigente && (
+            <div className="mt-3 flex flex-wrap items-center gap-4">
+              <span className="text-sm">
+                Abonado <strong className="text-green-700">{pesos(v.abonado)}</strong> · Saldo{" "}
+                <strong className={v.saldo > 0 ? "text-red-600" : "text-green-700"}>{pesos(v.saldo)}</strong>
+                {v.fecha_vencimiento && ` · vence ${new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO")}`}
+              </span>
+              {v.saldo > 0 && (
+                <BotonAbonar
+                  ventaId={v.id}
+                  consecutivo={v.consecutivo}
+                  cliente={v.clientes?.nombre ?? ""}
+                  saldo={Number(v.saldo)}
+                />
+              )}
+              {v.saldo <= 0 && !v.entregada && <BotonEntregar ventaId={v.id} />}
+              {v.tipo === "separado" && v.entregada && <span className="text-sm text-green-700">Entregado</span>}
+            </div>
+          )}
         </div>
         <AccionesVenta
           ventaId={v.id}
@@ -111,7 +145,9 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
           {e.encabezado_tirilla && <p className="mt-1 whitespace-pre-line">{e.encabezado_tirilla}</p>}
         </div>
         <Separador />
-        <p>Venta No. {v.consecutivo}</p>
+        <p>
+          Venta No. {v.consecutivo} · {TIPO[v.tipo]}
+        </p>
         <p>{new Date(v.fecha).toLocaleString("es-CO")}</p>
         {vendedor?.nombre && <p>Atendió: {vendedor.nombre}</p>}
         {v.clientes && (
@@ -148,9 +184,32 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
           <span>{pesos(v.total)}</span>
         </div>
         <Separador />
-        <Fila texto="Forma de pago" valor={FORMA[v.forma_pago] ?? v.forma_pago} />
-        {v.recibido != null && <Fila texto="Recibido" valor={pesos(v.recibido)} />}
-        {v.cambio != null && <Fila texto="Cambio" valor={pesos(v.cambio)} />}
+        {v.tipo === "contado" ? (
+          <Fila texto="Forma de pago" valor={FORMA[v.forma_pago] ?? v.forma_pago} />
+        ) : (
+          <>
+            <p className="font-bold">Pagos</p>
+            {pagos.length === 0 && <p>Sin abonos</p>}
+            {pagos.map((pg) => (
+              <Fila
+                key={pg.id}
+                texto={`${new Date(pg.fecha).toLocaleDateString("es-CO")} ${FORMA[pg.forma_pago] ?? pg.forma_pago}`}
+                valor={pesos(pg.valor)}
+              />
+            ))}
+            <Fila texto="Total abonado" valor={pesos(v.abonado)} />
+            <div className="flex justify-between font-bold">
+              <span>SALDO</span>
+              <span>{pesos(v.saldo)}</span>
+            </div>
+            {v.fecha_vencimiento && v.saldo > 0 && (
+              <p>Pagar antes de: {new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO")}</p>
+            )}
+            {v.tipo === "separado" && (
+              <p>{v.entregada ? "Producto entregado" : "Producto separado: se entrega al completar el pago"}</p>
+            )}
+          </>
+        )}
         {v.notas && <p className="mt-1">{v.notas}</p>}
         {e.pie_tirilla && (
           <>

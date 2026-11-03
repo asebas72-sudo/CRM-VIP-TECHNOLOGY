@@ -22,6 +22,8 @@ type Venta = {
   subtotal: number;
   total: number;
   forma_pago: string;
+  tipo: string;
+  saldo: number;
   estado: string;
   clientes: { nombre: string } | null;
   venta_items: { cantidad: number; costo_unitario: number }[];
@@ -37,7 +39,7 @@ export default async function HistorialVentas({ searchParams }: PageProps<"/vent
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("ventas")
-    .select("id, consecutivo, fecha, subtotal, total, forma_pago, estado, clientes (nombre), venta_items (cantidad, costo_unitario)")
+    .select("id, consecutivo, fecha, subtotal, total, forma_pago, tipo, saldo, estado, clientes (nombre), venta_items (cantidad, costo_unitario)")
     .eq("empresa_id", activa.id)
     .gte("fecha", `${desde}T00:00:00-05:00`)
     .lte("fecha", `${hasta}T23:59:59.999-05:00`)
@@ -54,7 +56,7 @@ export default async function HistorialVentas({ searchParams }: PageProps<"/vent
     0,
   );
   const porForma = Object.entries(
-    pagadas.reduce<Record<string, number>>((acc, v) => {
+    pagadas.filter((v) => v.tipo === "contado").reduce<Record<string, number>>((acc, v) => {
       acc[v.forma_pago] = (acc[v.forma_pago] ?? 0) + Number(v.total);
       return acc;
     }, {}),
@@ -103,7 +105,7 @@ export default async function HistorialVentas({ searchParams }: PageProps<"/vent
               <th className="px-4 py-3 font-medium">No.</th>
               <th className="px-4 py-3 font-medium">Fecha</th>
               <th className="px-4 py-3 font-medium">Cliente</th>
-              <th className="px-4 py-3 font-medium">Pago</th>
+              <th className="px-4 py-3 font-medium">Tipo / pago</th>
               <th className="px-4 py-3 text-right font-medium">Total</th>
             </tr>
           </thead>
@@ -117,7 +119,10 @@ export default async function HistorialVentas({ searchParams }: PageProps<"/vent
                 </td>
                 <td className="px-4 py-2">{new Date(v.fecha).toLocaleString("es-CO")}</td>
                 <td className="px-4 py-2">{v.clientes?.nombre ?? "—"}</td>
-                <td className="px-4 py-2">{FORMA[v.forma_pago] ?? v.forma_pago}</td>
+                <td className="px-4 py-2">
+                  {v.tipo === "contado" ? (FORMA[v.forma_pago] ?? v.forma_pago) : v.tipo === "credito" ? "Crédito" : "Separado"}
+                  {v.saldo > 0 && <span className="ml-2 text-xs font-semibold text-red-600">debe {pesos(v.saldo)}</span>}
+                </td>
                 <td className="px-4 py-2 text-right font-medium tabular-nums">{pesos(v.total)}</td>
               </tr>
             ))}
