@@ -33,9 +33,6 @@ export default async function PaginaEmpresas() {
             <tr>
               <th className="px-4 py-3 font-medium" colSpan={2}>
                 Empresa y NIT
-                <span className="ml-1 font-normal text-slate-400">
-                  (el NIT permite reconocer a qué empresa pertenece cada factura)
-                </span>
               </th>
               <th className="px-4 py-3 font-medium">Usuarios asignados</th>
               <th className="px-4 py-3 font-medium">Creada</th>
@@ -57,7 +54,7 @@ export default async function PaginaEmpresas() {
                     <input
                       name="nit"
                       defaultValue={e.nit ?? ""}
-                      placeholder="NIT sin dígito de verificación"
+                      placeholder="NIT"
                       aria-label="NIT"
                       className="w-56 rounded-md border border-slate-300 px-2 py-1 text-slate-700"
                     />

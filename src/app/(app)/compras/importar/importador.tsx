@@ -119,7 +119,6 @@ function FormularioImportacion({ empresas, empresaInicial, alReiniciar }: Props 
           vista={estado.vista}
           formulario={formRef}
           analizando={analizando}
-          alUsarSugerida={(id) => cambiarEmpresa(id)}
           alReiniciar={alReiniciar}
         />
       )}
@@ -131,13 +130,11 @@ function VistaPreviaCompra({
   vista,
   formulario,
   analizando,
-  alUsarSugerida,
   alReiniciar,
 }: {
   vista: VistaPrevia;
   formulario: React.RefObject<HTMLFormElement | null>;
   analizando: boolean;
-  alUsarSugerida: (empresaId: string) => void;
   alReiniciar: () => void;
 }) {
   const { factura, lineas, catalogo, empresa } = vista;
@@ -185,30 +182,6 @@ function VistaPreviaCompra({
         <p className="text-xl font-bold">{empresa.nombre}</p>
         {empresa.nit && <p className="text-sm text-slate-400">NIT {empresa.nit}</p>}
       </div>
-
-      {vista.coincideNit === false && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-          <p>
-            La factura está a nombre de <strong>{factura.cliente.nombre}</strong> (NIT {factura.cliente.nit}),
-            que no coincide con el NIT de {empresa.nombre}.
-          </p>
-          {vista.sugerida && (
-            <button className={botonSecundario} onClick={() => alUsarSugerida(vista.sugerida!.id)}>
-              Cargar a {vista.sugerida.nombre}
-            </button>
-          )}
-        </div>
-      )}
-      {vista.coincideNit === null && vista.sugerida && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
-          <p>
-            El comprador de la factura (NIT {factura.cliente.nit}) corresponde a <strong>{vista.sugerida.nombre}</strong>.
-          </p>
-          <button className={botonSecundario} onClick={() => alUsarSugerida(vista.sugerida!.id)}>
-            Cargar a {vista.sugerida.nombre}
-          </button>
-        </div>
-      )}
 
       <div className="grid gap-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200 sm:grid-cols-4">
         <Dato
@@ -330,7 +303,7 @@ function VistaPreviaCompra({
       {/* Confirmación antes de importar */}
       <Dialogo
         abierto={confirmando}
-        tono={vista.coincideNit === false ? "advertencia" : "info"}
+        tono="info"
         titulo="¿Confirmar importación?"
         alCerrar={importando ? undefined : () => setConfirmando(false)}
         acciones={
@@ -352,9 +325,6 @@ function VistaPreviaCompra({
           Se cargarán {cantidad(unidades)} unidades ({nuevos.size} producto(s) nuevo(s)) al inventario de:
         </p>
         <p className="rounded-lg bg-slate-100 px-3 py-2 text-base font-bold text-slate-900">{empresa.nombre}</p>
-        {vista.coincideNit === false && (
-          <p className="text-amber-700">Atención: el NIT del comprador de la factura no coincide con esta empresa.</p>
-        )}
       </Dialogo>
 
       {/* Resultado */}

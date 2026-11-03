@@ -20,12 +20,8 @@ export type EmpresaResumen = { id: string; nombre: string; nit: string | null };
 export type VistaPrevia = {
   factura: Omit<FacturaDian, "lineas">;
   lineas: LineaVistaPrevia[];
-  /** Empresa a la que se va a cargar la compra */
+  /** Empresa a la que se va a cargar la compra (la elige el usuario) */
   empresa: EmpresaResumen;
-  /** true/false si la empresa tiene NIT y coincide (o no) con el comprador de la factura */
-  coincideNit: boolean | null;
-  /** Otra empresa del usuario cuyo NIT sí coincide con el comprador */
-  sugerida: EmpresaResumen | null;
   proveedorNuevo: boolean;
   duplicada: boolean;
   catalogo: ProductoCatalogo[];
@@ -38,17 +34,6 @@ export type EdicionLinea = { codigo: string; nombre: string; manejaSerial: boole
 export type ResultadoImportacion =
   | { ok: true; compraId: string; empresaId: string; empresa: string; numero: string }
   | { ok: false; error: string };
-
-/** Solo dígitos del NIT, sin dígito de verificación: "901.476.410-1" → "901476410" */
-function normalizarNit(nit: string | null | undefined): string {
-  return (nit ?? "").split("-")[0].replace(/\D/g, "");
-}
-
-function mismoNit(a: string | null | undefined, b: string | null | undefined): boolean {
-  const x = normalizarNit(a);
-  const y = normalizarNit(b);
-  return x !== "" && y !== "" && (x === y || x.slice(0, -1) === y || y.slice(0, -1) === x);
-}
 
 /** Empresas donde el usuario puede cargar compras (admin o bodega). */
 async function empresasConPermiso(): Promise<EmpresaDelUsuario[]> {
@@ -134,11 +119,6 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
     return { ...linea, codigoSugerido: linea.codigoProveedor || `L${linea.linea}`, origen: null };
   });
 
-  const coincideNit = normalizarNit(empresa.nit) ? mismoNit(empresa.nit, factura.cliente.nit) : null;
-  const sugerida = coincideNit
-    ? null
-    : ((await empresasConPermiso()).find((e) => e.id !== empresa.id && mismoNit(e.nit, factura.cliente.nit)) ?? null);
-
   const encabezado: VistaPrevia["factura"] = {
     numero: factura.numero,
     cufe: factura.cufe,
@@ -156,8 +136,6 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
       factura: encabezado,
       lineas,
       empresa: resumen(empresa),
-      coincideNit,
-      sugerida: sugerida && resumen(sugerida),
       proveedorNuevo: !proveedorRes.data,
       duplicada,
       catalogo,
