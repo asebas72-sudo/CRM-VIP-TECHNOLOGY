@@ -17,7 +17,26 @@ type Formato = {
   qr: string;
 };
 
+/** Rollo de dos columnas: el CSS depende de la separación y el margen que mida el usuario. */
+const ID_DOS_COLUMNAS = "rollo-2x50x25";
+
+function cssDosColumnas(separacion: number, margen: number): string {
+  const anchoPapel = margen * 2 + 50 * 2 + separacion;
+  // Cada fila de 2 etiquetas ocupa exactamente una "página" de 25 mm del rollo
+  return `@page { size: ${anchoPapel}mm 25mm; margin: 0 }
+    .hoja-etiquetas { display: grid !important; grid-template-columns: 50mm 50mm; column-gap: ${separacion}mm; padding-left: ${margen}mm; }
+    .etiqueta { break-inside: avoid }`;
+}
+
 const FORMATOS: Formato[] = [
+  {
+    id: ID_DOS_COLUMNAS,
+    texto: "Rollo térmico 2 columnas · 50 × 25 mm",
+    ancho: "50mm",
+    alto: "25mm",
+    qr: "21mm",
+    css: cssDosColumnas(2, 1),
+  },
   {
     id: "rollo-50x25",
     texto: "Rollo térmico 50 × 25 mm",
@@ -55,7 +74,12 @@ export function GeneradorEtiquetas({
   const [busqueda, setBusqueda] = useState("");
   const [formatoId, setFormatoId] = useState(FORMATOS[0].id);
   const [conPrecio, setConPrecio] = useState(true);
-  const formato = FORMATOS.find((f) => f.id === formatoId)!;
+  // Ajuste fino del rollo de 2 columnas (milímetros)
+  const [separacion, setSeparacion] = useState(2);
+  const [margen, setMargen] = useState(1);
+  const dosColumnas = formatoId === ID_DOS_COLUMNAS;
+  const base = FORMATOS.find((f) => f.id === formatoId)!;
+  const formato = dosColumnas ? { ...base, css: cssDosColumnas(separacion, margen) } : base;
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -150,6 +174,43 @@ export function GeneradorEtiquetas({
               ))}
             </select>
           </label>
+          {dosColumnas && (
+            <div className="space-y-2 rounded-lg bg-slate-50 p-3 text-sm ring-1 ring-slate-200">
+              <p className="text-xs text-slate-600">
+                Dos etiquetas por fila (izquierda y derecha). Si la impresión sale corrida, ajuste estas medidas:
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="block text-xs font-medium text-slate-700">
+                  Separación (mm)
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={10}
+                    value={separacion}
+                    onChange={(e) => setSeparacion(Math.max(0, Number(e.target.value) || 0))}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1"
+                  />
+                </label>
+                <label className="block text-xs font-medium text-slate-700">
+                  Margen lateral (mm)
+                  <input
+                    type="number"
+                    step="0.5"
+                    min={0}
+                    max={10}
+                    value={margen}
+                    onChange={(e) => setMargen(Math.max(0, Number(e.target.value) || 0))}
+                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1"
+                  />
+                </label>
+              </div>
+              <p className="text-xs text-slate-500">
+                Papel: <strong>{margen * 2 + 100 + separacion} × 25 mm</strong> · {Math.ceil(total / 2)} fila(s)
+                {total % 2 === 1 && " · la última fila queda con la etiqueta derecha en blanco"}
+              </p>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={conPrecio} onChange={(e) => setConPrecio(e.target.checked)} />
             Mostrar precio en la etiqueta
@@ -167,9 +228,26 @@ export function GeneradorEtiquetas({
           {total > 0 && (
             <div>
               <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Vista previa</p>
-              <div className="origin-top-left rounded-md border border-dashed border-slate-300 p-2">
-                <Etiqueta producto={etiquetas[0]} formato={formato} conPrecio={conPrecio} />
-              </div>
+              {dosColumnas ? (
+                // Fila completa del rollo (a escala para que quepa en el panel)
+                <div className="overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-100 p-2">
+                  <div
+                    className="flex origin-top-left bg-white"
+                    style={{ gap: `${separacion}mm`, paddingInline: `${margen}mm`, width: "max-content", zoom: 0.68 }}
+                  >
+                    <Etiqueta producto={etiquetas[0]} formato={formato} conPrecio={conPrecio} />
+                    {etiquetas[1] ? (
+                      <Etiqueta producto={etiquetas[1]} formato={formato} conPrecio={conPrecio} />
+                    ) : (
+                      <div style={{ width: formato.ancho, height: formato.alto }} className="bg-white" />
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="origin-top-left rounded-md border border-dashed border-slate-300 p-2">
+                  <Etiqueta producto={etiquetas[0]} formato={formato} conPrecio={conPrecio} />
+                </div>
+              )}
             </div>
           )}
         </div>
