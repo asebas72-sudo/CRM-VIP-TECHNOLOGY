@@ -32,8 +32,8 @@ export default async function PaginaImportar({ searchParams }: PageProps<"/compr
   return (
     <div className="space-y-6">
       <div>
-        <Link href={desdeCorreo ? "/facturas-compra" : "/compras"} className="text-sm text-blue-700 hover:underline">
-          ← {desdeCorreo ? "Procesar facturas de compra" : "Compras"}
+        <Link href={desdeCorreo ? "/compras/consultar" : "/compras"} className="text-sm text-blue-700 hover:underline">
+          ← {desdeCorreo ? "Consultar compras" : "Compras"}
         </Link>
         <h1 className="mt-1 text-2xl font-bold text-slate-900">Importar factura de compra</h1>
         <p className="text-sm text-slate-500">

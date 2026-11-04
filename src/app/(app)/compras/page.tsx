@@ -50,6 +50,12 @@ export default async function PaginaCompras() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Link
+            href="/compras/consultar"
+            className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            Consultar compras
+          </Link>
+          <Link
             href="/compras/foto"
             className="rounded-lg border border-slate-300 bg-white px-4 py-2 font-semibold text-slate-700 hover:bg-slate-50"
           >

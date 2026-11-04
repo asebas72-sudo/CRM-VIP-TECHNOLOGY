@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { asignarEmpresa, guardarConfigBuzon, marcarCuenti, procesarAhora, type ConfigBuzon } from "./acciones";
@@ -321,17 +320,10 @@ function VistaFacturas({
                         </option>
                       ))}
                     </select>
-                    {f.empresa_id ? (
-                      <Link
-                        href={`/compras/importar?correo=${f.id}`}
-                        className="inline-block rounded px-2 py-1 text-[12px] font-semibold text-white"
-                        style={{ background: C.verde }}
-                      >
-                        Cargar a Compras →
-                      </Link>
-                    ) : (
-                      <span className="block text-[11.5px] text-amber-700">Elija la empresa para cargarla</span>
-                    )}
+                    {/* Se carga al inventario desde Compras > Consultar compras de esa empresa */}
+                    <span className={`block text-[11.5px] ${f.empresa_id ? "" : "text-amber-700"}`} style={f.empresa_id ? { color: C.suave } : undefined}>
+                      {f.empresa_id ? "Pendiente en Compras" : "Asigne la empresa"}
+                    </span>
                   </div>
                 )}
               </Td>
