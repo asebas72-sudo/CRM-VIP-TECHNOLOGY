@@ -19,6 +19,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/cartera", texto: "Cartera y abonos", roles: ["admin", "vendedor"] },
       { href: "/productos", texto: "Productos", roles: ["admin", "bodega", "vendedor"] },
       { href: "/compras", texto: "Compras", roles: ["admin", "bodega"] },
+      { href: "/facturas-compra", texto: "Procesar facturas de compra", roles: TODOS, soloAccesoTotal: true },
       { href: "/etiquetas", texto: "Etiquetas QR", roles: ["admin", "bodega"] },
       { href: "/informes", texto: "Informes", roles: ["admin"] },
       {

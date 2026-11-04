@@ -49,6 +49,16 @@ async function empresaDestino(form: FormData): Promise<EmpresaDelUsuario> {
 }
 
 async function leerArchivoXml(form: FormData): Promise<{ xml: string; archivo: File }> {
+  // Factura que llegó por correo (Procesar facturas de compra): el XML ya está guardado
+  const correoId = String(form.get("correo_id") ?? "");
+  if (correoId) {
+    const supabase = await crearClienteServidor();
+    const { data } = await supabase.from("facturas_correo").select("xml, archivo, numero").eq("id", correoId).maybeSingle();
+    if (!data) throw new Error("No se encontró la factura del correo.");
+    const nombre = `${data.numero || "factura"}.xml`;
+    return { xml: data.xml, archivo: new File([data.xml], nombre, { type: "application/xml" }) };
+  }
+
   const archivo = form.get("xml");
   if (!(archivo instanceof File) || archivo.size === 0) {
     throw new Error("Seleccione el archivo XML de la factura.");
@@ -216,6 +226,12 @@ export async function importarCompra(form: FormData): Promise<ResultadoImportaci
   }
   if (rutas.xml_path || rutas.pdf_path) {
     await supabase.from("compras").update(rutas).eq("id", compraId);
+  }
+
+  // Si vino del correo, la factura queda marcada como cargada a Compras
+  const correoId = String(form.get("correo_id") ?? "");
+  if (correoId) {
+    await supabase.from("facturas_correo").update({ compra_id: compraId, empresa_id: empresa.id }).eq("id", correoId);
   }
 
   return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero: factura.numero };

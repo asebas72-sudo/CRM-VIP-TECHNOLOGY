@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const RUTAS_PUBLICAS = ["/login", "/api/salud"];
+// /api/correo se protege con su propio token (lo llama la tarea programada)
+const RUTAS_PUBLICAS = ["/login", "/api/salud", "/api/correo"];
 
 /** Refresca la sesión de Supabase y envía a /login a quien no haya iniciado sesión. */
 export async function proxy(request: NextRequest) {

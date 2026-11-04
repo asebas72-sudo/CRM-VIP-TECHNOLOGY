@@ -20,5 +20,11 @@ services:
         sync: false
       - key: SUPABASE_SECRET_KEY
         sync: false
+      - key: GMAIL_USUARIO
+        value: vipautomatizaciones@gmail.com
+      - key: GMAIL_CLAVE_APP
+        sync: false
+      - key: CORREO_CRON_TOKEN
+        generateValue: true
       - key: ANTHROPIC_API_KEY
         sync: false

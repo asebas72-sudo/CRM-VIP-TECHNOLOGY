@@ -75,3 +75,14 @@ scripts/              Utilidades de línea de comandos
 ```
 
 > Las facturas reales **no** se suben al repositorio (contienen datos de terceros).
+
+## Procesar facturas de compra (correo)
+
+Lee la cuenta de Gmail configurada y registra las facturas electrónicas (.zip con XML) y los
+correos de pago ("Pago de:"). Solo la ve el superadmin, en Ventas > Procesar facturas de compra.
+
+1. En la cuenta de Gmail: activar la verificación en 2 pasos y crear una **contraseña de
+   aplicación** (myaccount.google.com/apppasswords).
+2. Variables en Render y en `.env.local`: `GMAIL_USUARIO`, `GMAIL_CLAVE_APP` y `CORREO_CRON_TOKEN`.
+3. cron-job.org cada 15 minutos: `https://<su-app>.onrender.com/api/correo/procesar?token=<CORREO_CRON_TOKEN>`.
+4. Ejecutar la migración `0012_buzon_correo.sql`.

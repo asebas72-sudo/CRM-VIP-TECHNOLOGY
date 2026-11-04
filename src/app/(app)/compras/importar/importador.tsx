@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { ValorCopiable } from "@/components/copiar";
 import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { cantidad, fecha, pesos } from "@/lib/formato";
@@ -18,7 +18,12 @@ import {
 const campo =
   "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20";
 
-type Props = { empresas: EmpresaResumen[]; empresaInicial: string };
+type Props = {
+  empresas: EmpresaResumen[];
+  empresaInicial: string;
+  /** Factura recibida por correo (Procesar facturas de compra): no se sube archivo */
+  desdeCorreo?: { id: string; descripcion: string } | null;
+};
 
 /** Envoltura que permite empezar de cero ("Importar otra factura"). */
 export function Importador(props: Props) {
@@ -26,12 +31,22 @@ export function Importador(props: Props) {
   return <FormularioImportacion key={intento} {...props} alReiniciar={() => setIntento((n) => n + 1)} />;
 }
 
-function FormularioImportacion({ empresas, empresaInicial, alReiniciar }: Props & { alReiniciar: () => void }) {
+function FormularioImportacion({ empresas, empresaInicial, desdeCorreo, alReiniciar }: Props & { alReiniciar: () => void }) {
   const [estado, analizar, analizando] = useActionState<EstadoAnalisis, FormData>(analizarFactura, {});
   const [, iniciarAnalisis] = useTransition();
   const [empresaId, setEmpresaId] = useState(empresaInicial);
   const [errorCerrado, setErrorCerrado] = useState<EstadoAnalisis | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
+  const leidaDelCorreo = useRef(false);
+
+  // Factura del correo: se lee sola al abrir la página
+  useEffect(() => {
+    if (!desdeCorreo || leidaDelCorreo.current || !formRef.current) return;
+    leidaDelCorreo.current = true;
+    const datos = new FormData(formRef.current);
+    datos.set("empresa_id", empresaInicial);
+    iniciarAnalisis(() => analizar(datos));
+  }, [desdeCorreo, empresaInicial, analizar]);
 
   // onSubmit en vez de action: así React no limpia los archivos elegidos,
   // que se vuelven a enviar al confirmar la importación.
@@ -75,16 +90,26 @@ function FormularioImportacion({ empresas, empresaInicial, alReiniciar }: Props 
             ))}
           </select>
         </label>
-        <label className="block text-sm font-medium text-slate-700">
-          Factura XML (obligatorio)
-          <input
-            name="xml"
-            type="file"
-            accept=".xml,text/xml,application/xml"
-            required
-            className="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white"
-          />
-        </label>
+        {desdeCorreo ? (
+          <div className="text-sm font-medium text-slate-700">
+            Factura recibida por correo
+            <input type="hidden" name="correo_id" value={desdeCorreo.id} />
+            <p className="mt-1 rounded-lg bg-emerald-50 px-3 py-2 font-normal text-emerald-900 ring-1 ring-emerald-200">
+              ✉ {desdeCorreo.descripcion}
+            </p>
+          </div>
+        ) : (
+          <label className="block text-sm font-medium text-slate-700">
+            Factura XML (obligatorio)
+            <input
+              name="xml"
+              type="file"
+              accept=".xml,text/xml,application/xml"
+              required
+              className="mt-1 block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white"
+            />
+          </label>
+        )}
         <label className="block text-sm font-medium text-slate-700">
           PDF de la factura (opcional)
           <input
