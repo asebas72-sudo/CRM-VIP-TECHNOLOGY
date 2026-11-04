@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ValorCopiable } from "@/components/copiar";
 import { exigirRol } from "@/lib/empresa";
-import { fecha, pesos } from "@/lib/formato";
+import { pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
+import { FilaFactura } from "./fila";
 
 type Factura = {
   id: string;
@@ -68,8 +68,8 @@ export default async function ConsultarCompras({ searchParams }: PageProps<"/com
           </Link>
           <h1 className="mt-1 text-2xl font-bold text-slate-900">Consultar compras</h1>
           <p className="text-sm text-slate-500">
-            Facturas de proveedores que llegaron al correo para <strong>{activa.nombre}</strong>. Cárguelas al inventario con un
-            clic.
+            Facturas de proveedores que llegaron al correo para <strong>{activa.nombre}</strong>. Haga clic en una para ver lo
+            comprado antes de cargarla al inventario.
           </p>
         </div>
         <div className="flex gap-1 rounded-lg bg-white p-1 text-sm ring-1 ring-slate-200">
@@ -103,36 +103,7 @@ export default async function ConsultarCompras({ searchParams }: PageProps<"/com
       ) : (
         <div className="space-y-2">
           {lista.map((f) => (
-            <details key={f.id} className="group rounded-2xl bg-white ring-1 ring-slate-200">
-              <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 hover:bg-slate-50">
-                <span className="w-24 text-sm text-slate-600">{f.fecha_documento ? fecha(f.fecha_documento) : "—"}</span>
-                <span className="min-w-56 flex-1">
-                  <span className="block font-medium text-slate-900">{f.proveedor_nombre}</span>
-                  <span className="text-xs text-slate-500">
-                    Factura {f.numero ?? "—"}
-                    {f.proveedor_nit && ` · NIT ${f.proveedor_nit}`}
-                  </span>
-                </span>
-                <span className="w-32 text-right font-semibold tabular-nums">{pesos(f.monto)}</span>
-                <span className="w-44 text-right">
-                  {f.compra_id ? (
-                    <Link href={`/compras/${f.compra_id}`} className="rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-800 hover:underline">
-                      ✓ En Compras
-                    </Link>
-                  ) : (
-                    <Link
-                      href={`/compras/importar?correo=${f.id}`}
-                      className="inline-block rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-blue-700"
-                    >
-                      Cargar al inventario
-                    </Link>
-                  )}
-                </span>
-              </summary>
-              <div className="border-t border-slate-100 px-4 py-3">
-                <ValorCopiable etiqueta="CUFE" valor={f.cufe} />
-              </div>
-            </details>
+            <FilaFactura key={f.id} f={f} empresa={{ nombre: activa.nombre, nit: activa.nit }} />
           ))}
         </div>
       )}
