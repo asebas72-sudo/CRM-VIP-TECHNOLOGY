@@ -16,7 +16,7 @@ export default async function PaginaFacturasCompra() {
     supabase
       .from("facturas_correo")
       .select(
-        "id, cufe, numero, fecha_documento, proveedor_nombre, proveedor_nit, cliente_nombre, cliente_nit, monto, empresa_id, asunto, remitente, archivo, compra_id, cuenti, creado_en",
+        "id, cufe, numero, fecha_documento, proveedor_nombre, proveedor_nit, cliente_nombre, cliente_nit, monto, empresa_id, asunto, remitente, archivo, compra_id, cuenti, sin_empresa, creado_en",
       )
       .order("fecha_documento", { ascending: false, nullsFirst: false })
       .order("creado_en", { ascending: false })

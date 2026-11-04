@@ -42,7 +42,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/cartera", texto: "Cartera y abonos", icono: Wallet, roles: ["admin", "vendedor"] },
       { href: "/productos", texto: "Productos", icono: Package, roles: ["admin", "bodega", "vendedor"] },
       { href: "/compras", texto: "Compras", icono: Truck, roles: ["admin", "bodega"] },
-      { href: "/facturas-compra", texto: "Procesar facturas de compra", icono: MailCheck, roles: TODOS, soloAccesoTotal: true },
+      { href: "/facturas-compra", texto: "Facturas compras", icono: MailCheck, roles: TODOS, soloAccesoTotal: true },
       { href: "/etiquetas", texto: "Etiquetas QR", icono: QrCode, roles: ["admin", "bodega"] },
       { href: "/informes", texto: "Informes", icono: BarChart3, roles: ["admin"] },
       {

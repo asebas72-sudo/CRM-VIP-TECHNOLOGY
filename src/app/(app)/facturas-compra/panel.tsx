@@ -20,8 +20,12 @@ export type FacturaCorreo = {
   archivo: string | null;
   compra_id: string | null;
   cuenti: boolean;
+  sin_empresa?: boolean;
   creado_en: string;
 };
+
+/** Valor del selector para "no corresponde a ninguna empresa". */
+const SIN_EMPRESA = "__sin_empresa__";
 
 export type PagoCorreo = {
   id: string;
@@ -207,7 +211,7 @@ function VistaFacturas({
   const lista = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
     return facturas.filter((f) => {
-      if (filtro === "pendientes" && f.compra_id) return false;
+      if (filtro === "pendientes" && (f.compra_id || f.sin_empresa)) return false;
       if (filtro === "importadas" && !f.compra_id) return false;
       if (filtro === "sin-cuenti" && f.cuenti) return false;
       if (!q) return true;
@@ -216,7 +220,7 @@ function VistaFacturas({
   }, [facturas, busqueda, filtro]);
 
   const total = lista.reduce((s, f) => s + Number(f.monto ?? 0), 0);
-  const pendientes = facturas.filter((f) => !f.compra_id).length;
+  const pendientes = facturas.filter((f) => !f.compra_id && !f.sin_empresa).length;
 
   async function cambiarCuenti(f: FacturaCorreo, valor: boolean) {
     setFacturas((a) => a.map((x) => (x.id === f.id ? { ...x, cuenti: valor } : x)));
@@ -227,10 +231,15 @@ function VistaFacturas({
     } else mostrar(valor ? "Marcada como registrada en Cuenti" : "Marca de Cuenti quitada");
   }
 
-  async function cambiarEmpresa(f: FacturaCorreo, empresaId: string) {
-    setFacturas((a) => a.map((x) => (x.id === f.id ? { ...x, empresa_id: empresaId || null } : x)));
-    const r = await asignarEmpresa(f.id, empresaId || null);
-    if (r.error) mostrar(`Error: ${r.error}`);
+  async function cambiarEmpresa(f: FacturaCorreo, valor: string) {
+    const sinEmpresa = valor === SIN_EMPRESA;
+    const empresaId = sinEmpresa ? null : valor || null;
+    setFacturas((a) => a.map((x) => (x.id === f.id ? { ...x, empresa_id: empresaId, sin_empresa: sinEmpresa } : x)));
+    const r = await asignarEmpresa(f.id, empresaId, sinEmpresa);
+    if (r.error) {
+      setFacturas((a) => a.map((x) => (x.id === f.id ? { ...x, empresa_id: f.empresa_id, sin_empresa: f.sin_empresa } : x)));
+      mostrar(`Error: ${r.error}`);
+    } else if (sinEmpresa) mostrar("Factura marcada sin empresa: no se carga a Compras");
   }
 
   return (
@@ -307,10 +316,10 @@ function VistaFacturas({
                 ) : (
                   <div className="space-y-1">
                     <select
-                      value={f.empresa_id ?? ""}
+                      value={f.sin_empresa ? SIN_EMPRESA : (f.empresa_id ?? "")}
                       onChange={(e) => cambiarEmpresa(f, e.target.value)}
                       className="w-full rounded border bg-white px-1.5 py-1 text-[12.5px]"
-                      style={{ borderColor: f.empresa_id ? C.linea : "#d97706" }}
+                      style={{ borderColor: f.empresa_id || f.sin_empresa ? C.linea : "#d97706" }}
                       aria-label="Empresa de la factura"
                     >
                       <option value="">Sin asignar…</option>
@@ -319,10 +328,14 @@ function VistaFacturas({
                           {e.nombre}
                         </option>
                       ))}
+                      <option value={SIN_EMPRESA}>Sin empresa (no se carga)</option>
                     </select>
                     {/* Se carga al inventario desde Compras > Consultar compras de esa empresa */}
-                    <span className={`block text-[11.5px] ${f.empresa_id ? "" : "text-amber-700"}`} style={f.empresa_id ? { color: C.suave } : undefined}>
-                      {f.empresa_id ? "Pendiente en Compras" : "Asigne la empresa"}
+                    <span
+                      className={`block text-[11.5px] ${f.empresa_id || f.sin_empresa ? "" : "text-amber-700"}`}
+                      style={f.empresa_id || f.sin_empresa ? { color: C.suave } : undefined}
+                    >
+                      {f.sin_empresa ? "No se carga a Compras" : f.empresa_id ? "Pendiente en Compras" : "Asigne la empresa"}
                     </span>
                   </div>
                 )}

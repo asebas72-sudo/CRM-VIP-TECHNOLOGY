@@ -38,12 +38,18 @@ export async function marcarCuenti(tabla: "facturas" | "pagos", id: string, valo
   }
 }
 
-/** Empresa a la que corresponde una factura (cuando no se reconoció por el NIT del comprador). */
-export async function asignarEmpresa(facturaId: string, empresaId: string | null): Promise<{ error?: string }> {
+/**
+ * Empresa a la que corresponde una factura (cuando no se reconoció por el NIT del comprador).
+ * Con sinEmpresa=true queda marcada como de ninguna empresa: no se carga a Compras.
+ */
+export async function asignarEmpresa(facturaId: string, empresaId: string | null, sinEmpresa = false): Promise<{ error?: string }> {
   try {
     await exigirSuperadmin();
     const supabase = await crearClienteServidor();
-    const { error } = await supabase.from("facturas_correo").update({ empresa_id: empresaId }).eq("id", facturaId);
+    const { error } = await supabase
+      .from("facturas_correo")
+      .update({ empresa_id: sinEmpresa ? null : empresaId, sin_empresa: sinEmpresa })
+      .eq("id", facturaId);
     revalidatePath("/facturas-compra");
     return error ? { error: error.message } : {};
   } catch (e) {
