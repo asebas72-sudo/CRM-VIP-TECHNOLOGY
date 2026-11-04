@@ -30,10 +30,10 @@ export function FormularioAgregar({ empresas }: { empresas: { id: string; nombre
       </summary>
       <form action={accion} className="space-y-4 border-t border-slate-100 p-5">
         <p className="text-sm text-slate-500">
-          Se crea con una contraseña temporal que usted le entrega (por WhatsApp o en persona). La primera vez que entre, el
-          sistema le pedirá cambiarla.
+          El sistema genera una contraseña temporal que usted le entrega (por WhatsApp o en persona). La primera vez que
+          entre, el sistema le pedirá cambiarla.
         </p>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <label className="block text-sm font-medium text-slate-700">
             Nombre completo *
             <input name="nombre" required className={campo} />
@@ -45,10 +45,6 @@ export function FormularioAgregar({ empresas }: { empresas: { id: string; nombre
           <label className="block text-sm font-medium text-slate-700">
             Celular (WhatsApp)
             <input name="celular" inputMode="numeric" className={campo} />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Contraseña temporal
-            <input name="clave" placeholder="Se genera automáticamente" className={campo} />
           </label>
         </div>
 
