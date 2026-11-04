@@ -113,7 +113,9 @@ export function GeneradorEtiquetas({
             />
             <button
               className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
-              onClick={() => visibles.forEach((p) => fijar(p.id, Math.max(Math.round(p.stock), 1)))}
+              // Una etiqueta por unidad en stock; sin stock no se imprime
+              onClick={() => visibles.forEach((p) => fijar(p.id, Math.max(Math.floor(p.stock), 0)))}
+              title="Una etiqueta por cada unidad en inventario (los productos sin stock quedan en 0)"
             >
               Todos según stock
             </button>
