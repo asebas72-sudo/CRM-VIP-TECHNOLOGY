@@ -101,7 +101,7 @@ export function MenuLateral({ rol, modulos, accesoTotal }: { rol: Rol; modulos: 
       <Link
         key={o.href}
         href={o.href}
-        className={`flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm ${hijo ? "md:pl-8" : ""} ${
+        className={`flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm md:whitespace-normal ${hijo ? "md:pl-8" : ""} ${
           activo ? "bg-slate-800 font-semibold text-white" : "text-slate-300 hover:bg-slate-800 hover:text-white"
         }`}
       >
@@ -112,7 +112,7 @@ export function MenuLateral({ rol, modulos, accesoTotal }: { rol: Rol; modulos: 
   };
 
   return (
-    <nav className="flex gap-1 overflow-x-auto md:flex-col md:gap-0">
+    <nav className="sin-barra flex gap-1 overflow-x-auto md:flex-col md:gap-0 md:overflow-x-hidden">
       {menu && (
         <p className="hidden px-3 pt-1 pb-2 text-xs font-semibold tracking-wide text-slate-400 uppercase md:block">{menu.titulo}</p>
       )}
@@ -165,7 +165,7 @@ function Submenu({
         type="button"
         onClick={() => setAbierto(!abierto)}
         aria-expanded={abierto}
-        className="flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-left text-sm text-slate-300 hover:bg-slate-800 hover:text-white"
+        className="flex items-center gap-3 whitespace-nowrap rounded-lg px-3 py-2.5 text-left text-sm text-slate-300 md:whitespace-normal hover:bg-slate-800 hover:text-white"
       >
         <Icono className="size-[18px] shrink-0 text-slate-400" strokeWidth={1.8} aria-hidden />
         <span className="flex-1">{titulo}</span>

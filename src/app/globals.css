@@ -17,3 +17,38 @@ body {
   color: var(--foreground);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
+
+/* Menú lateral: barra vertical delgada y discreta, del color del menú */
+.barra-menu {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  scrollbar-gutter: stable;
+  transition: scrollbar-color 0.2s;
+}
+.barra-menu:hover {
+  scrollbar-color: #475569 transparent;
+}
+.barra-menu::-webkit-scrollbar {
+  width: 6px;
+}
+.barra-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+.barra-menu::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 9999px;
+}
+.barra-menu:hover::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+.barra-menu::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* Menú en celular: se desliza de lado sin mostrar la barra */
+.sin-barra {
+  scrollbar-width: none;
+}
+.sin-barra::-webkit-scrollbar {
+  display: none;
+}
