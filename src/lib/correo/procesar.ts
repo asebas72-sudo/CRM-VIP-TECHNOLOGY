@@ -24,17 +24,6 @@ export type ResultadoRevision = {
 
 type Admin = ReturnType<typeof crearClienteAdmin>;
 
-/** Solo dígitos del NIT, sin dígito de verificación */
-function nitBase(nit: string | null | undefined): string {
-  return (nit ?? "").split("-")[0].replace(/\D/g, "");
-}
-
-function mismoNit(a: string | null | undefined, b: string | null | undefined): boolean {
-  const x = nitBase(a);
-  const y = nitBase(b);
-  return x !== "" && y !== "" && (x === y || x.slice(0, -1) === y || y.slice(0, -1) === x);
-}
-
 function decodificar(bytes: Uint8Array): string {
   const utf8 = new TextDecoder("utf-8").decode(bytes);
   return utf8.includes("�") ? new TextDecoder("latin1").decode(bytes) : utf8;
@@ -99,12 +88,12 @@ function datosFactura(xml: string) {
   };
 }
 
-async function guardarFacturas(admin: Admin, correo: ParsedMail, correoId: string, empresas: { id: string; nit: string | null }[]) {
+/** Las facturas entran sin empresa: el superadmin la elige en "Facturas compras". */
+async function guardarFacturas(admin: Admin, correo: ParsedMail, correoId: string) {
   let nuevas = 0;
   for (const { archivo, xml } of xmlsDelCorreo(correo)) {
     const d = datosFactura(xml);
     if (!d) continue;
-    const empresa = d.clienteNit ? empresas.find((e) => mismoNit(e.nit, d.clienteNit)) : undefined;
     const { data } = await admin
       .from("facturas_correo")
       .upsert(
@@ -117,7 +106,7 @@ async function guardarFacturas(admin: Admin, correo: ParsedMail, correoId: strin
           cliente_nombre: d.clienteNombre,
           cliente_nit: d.clienteNit,
           monto: d.monto,
-          empresa_id: empresa?.id ?? null,
+          empresa_id: null,
           asunto: correo.subject ?? null,
           remitente: correo.from?.text ?? null,
           archivo,
@@ -169,10 +158,7 @@ export async function revisarCorreo(): Promise<ResultadoRevision> {
   }
 
   const admin = crearClienteAdmin();
-  const [{ data: config, error: errorConfig }, { data: empresas }] = await Promise.all([
-    admin.from("buzon_config").select("*").eq("id", 1).single(),
-    admin.from("empresas").select("id, nit"),
-  ]);
+  const { data: config, error: errorConfig } = await admin.from("buzon_config").select("*").eq("id", 1).single();
   if (errorConfig || !config) throw new Error("No se encontró la configuración del buzón (ejecute la migración 0012).");
 
   const resultado: ResultadoRevision = { correosLeidos: 0, facturasNuevas: 0, pagosNuevos: 0, errores: 0, pendientes: 0 };
@@ -232,7 +218,7 @@ export async function revisarCorreo(): Promise<ResultadoRevision> {
         try {
           const nuevos =
             p.tipo === "factura"
-              ? await guardarFacturas(admin, correo, p.id, empresas ?? [])
+              ? await guardarFacturas(admin, correo, p.id)
               : await guardarPagos(admin, correo, p.id, config.prefijo_factura_pago);
           if (p.tipo === "factura") resultado.facturasNuevas += nuevos;
           else resultado.pagosNuevos += nuevos;
