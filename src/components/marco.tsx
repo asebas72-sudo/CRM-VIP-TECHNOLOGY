@@ -1,5 +1,6 @@
 "use client";
 
+import { PanelLeftClose, Pin } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
@@ -27,9 +28,10 @@ export function Marco({ menu, barra, children }: { menu: ReactNode; barra: React
       type="button"
       onClick={() => setFijo(!fijo)}
       title={fijo ? "Ocultar el menú automáticamente" : "Dejar el menú siempre visible"}
-      className="hidden w-full rounded-lg px-3 py-1.5 text-left text-xs text-slate-400 hover:bg-slate-800 hover:text-white md:block"
+      className="hidden w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-xs text-slate-400 hover:bg-slate-800 hover:text-white md:flex"
     >
-      {fijo ? "⇤ Ocultar menú" : "📌 Fijar menú"}
+      {fijo ? <PanelLeftClose className="size-4" aria-hidden /> : <Pin className="size-4" aria-hidden />}
+      {fijo ? "Ocultar menú" : "Fijar menú"}
     </button>
   );
 
@@ -45,7 +47,8 @@ export function Marco({ menu, barra, children }: { menu: ReactNode; barra: React
           {/* Celular: menú arriba como siempre */}
           <div className="md:hidden print:hidden">{menu}</div>
           {/* Computador: franja a la izquierda; el menú se desliza encima del contenido al pasar el mouse */}
-          <div className="group/menu fixed inset-y-0 left-0 z-40 hidden w-60 -translate-x-[calc(100%-10px)] transition-transform duration-200 ease-out hover:translate-x-0 focus-within:translate-x-0 md:block print:hidden">
+          {/* Se abre con el mouse encima (o con Tab del teclado) y se cierra apenas sale el mouse */}
+          <div className="group/menu fixed inset-y-0 left-0 z-40 hidden w-60 -translate-x-[calc(100%-10px)] transition-transform duration-200 ease-out hover:translate-x-0 has-[:focus-visible]:translate-x-0 md:block print:hidden">
             <div className="flex h-full flex-col overflow-y-auto bg-slate-900 shadow-2xl [&>aside]:flex-1">
               {menu}
               <div className="px-4 pb-4">{botonFijar}</div>
