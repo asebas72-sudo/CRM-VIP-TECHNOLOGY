@@ -73,6 +73,49 @@ function slug(texto: string): string {
 
 const redondear = (n: number) => Math.round(n * 100) / 100;
 
+/** Nombre comparable: sin tildes, mayúsculas ni espacios de más. */
+function nombreComparable(texto: string): string {
+  return texto
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Productos nuevos: el código lo pone el sistema (P00001, P00002...).
+ * Si el nombre ya existe en el inventario se usa ese producto para no duplicarlo,
+ * y dos líneas nuevas con el mismo nombre comparten código.
+ */
+async function asignarCodigos(
+  supabase: Awaited<ReturnType<typeof crearClienteServidor>>,
+  empresaId: string,
+  lineas: LineaManual[],
+): Promise<LineaManual[]> {
+  if (lineas.every((l) => l.codigo.trim())) return lineas;
+
+  const { data } = await supabase.from("productos").select("codigo, nombre").eq("empresa_id", empresaId);
+  const productos = data ?? [];
+  const porNombre = new Map(productos.map((p) => [nombreComparable(p.nombre), p.codigo]));
+  let ultimo = productos.reduce((max, p) => {
+    const m = /^P(\d+)$/.exec(p.codigo);
+    return m ? Math.max(max, Number(m[1])) : max;
+  }, 0);
+
+  return lineas.map((l) => {
+    if (l.codigo.trim()) return l;
+    const clave = nombreComparable(l.nombre);
+    let codigo = porNombre.get(clave);
+    if (!codigo) {
+      ultimo += 1;
+      codigo = `P${String(ultimo).padStart(5, "0")}`;
+      porNombre.set(clave, codigo);
+    }
+    return { ...l, codigo };
+  });
+}
+
 /** Registra una compra escrita a mano o leída de una foto, con su soporte. */
 export async function guardarCompraManual(form: FormData): Promise<ResultadoImportacion> {
   let empresa: EmpresaDelUsuario;
@@ -87,10 +130,9 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   if (!proveedor) return { ok: false, error: "Escriba el nombre del proveedor." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(datos.fecha ?? "")) return { ok: false, error: "Indique la fecha del documento." };
 
-  const lineas = (datos.lineas ?? []).filter((l) => l.nombre.trim() || l.codigo.trim());
-  if (lineas.length === 0) return { ok: false, error: "Agregue al menos un producto." };
-  for (const l of lineas) {
-    if (!l.codigo.trim() || !l.nombre.trim()) return { ok: false, error: "Cada producto necesita código y nombre." };
+  const escritas = (datos.lineas ?? []).filter((l) => l.nombre.trim());
+  if (escritas.length === 0) return { ok: false, error: "Agregue al menos un producto." };
+  for (const l of escritas) {
     if (!(l.cantidad > 0)) return { ok: false, error: `Cantidad inválida en "${l.nombre}".` };
     if (!(l.costo_unitario >= 0)) return { ok: false, error: `Costo inválido en "${l.nombre}".` };
   }
@@ -98,6 +140,9 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   // Recibos sin NIT o sin número: se generan identificadores estables
   const nit = datos.proveedor_nit?.replace(/\D/g, "") || `SN-${slug(proveedor)}`;
   const numero = datos.numero?.trim() || `M-${datos.fecha.replace(/-/g, "")}-${Date.now().toString().slice(-5)}`;
+
+  const supabase = await crearClienteServidor();
+  const lineas = await asignarCodigos(supabase, empresa.id, escritas);
 
   const items = lineas.map((l) => {
     const subtotal = redondear(l.cantidad * l.costo_unitario);
@@ -120,7 +165,6 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   const subtotal = redondear(items.reduce((s, i) => s + i.cantidad * i.costo_unitario, 0));
   const iva = redondear(items.reduce((s, i) => s + i.iva_valor, 0));
 
-  const supabase = await crearClienteServidor();
   const { data: compraId, error } = await supabase.rpc("importar_compra", {
     p_empresa: empresa.id,
     p_compra: {

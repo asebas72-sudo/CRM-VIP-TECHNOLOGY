@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useId, useMemo, useState, useTransition } from "react";
 import { ValorCopiable } from "@/components/copiar";
 import { botonExito, botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { pesos } from "@/lib/formato";
@@ -9,6 +9,7 @@ import type { DocumentoLeido } from "@/lib/facturas/foto";
 import { verCompra, type ProductoCatalogo, type ResultadoImportacion } from "../importar/acciones";
 import { catalogoEmpresa, guardarCompraManual, leerFoto, type CompraManual } from "./acciones";
 
+/** codigo: el del producto existente elegido en el buscador; vacío = producto nuevo (el sistema le pone código). */
 type Linea = { codigo: string; nombre: string; cantidad: string; costo: string; iva: string };
 
 const TIPOS_DOC = [
@@ -24,18 +25,115 @@ const campo = "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text
 const numero = (v: string) => Number(v.replace(/\./g, "").replace(",", ".")) || 0;
 const lineaVacia = (): Linea => ({ codigo: "", nombre: "", cantidad: "1", costo: "", iva: "0" });
 
-function codigoDesde(texto: string): string {
-  const base = texto
+/** Texto para buscar: sin tildes, en minúsculas y sin espacios de más. */
+function normalizar(texto: string): string {
+  return texto
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
-    .toUpperCase()
-    .replace(/[^A-Z0-9 ]/g, "")
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 4)
-    .map((p) => p.slice(0, 4))
-    .join("-");
-  return base ? `P-${base}` : "";
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/** Productos que contienen todas las palabras escritas (en el nombre o el código). */
+function sugerencias(catalogo: ProductoCatalogo[], texto: string): ProductoCatalogo[] {
+  const palabras = normalizar(texto).split(" ").filter(Boolean);
+  if (palabras.length === 0) return [];
+  return catalogo
+    .filter((p) => {
+      const donde = normalizar(`${p.nombre} ${p.codigo}`);
+      return palabras.every((w) => donde.includes(w));
+    })
+    .slice(0, 8);
+}
+
+/**
+ * Campo "Producto" con sugerencias del inventario mientras se escribe.
+ * Elegir una sugerencia suma a ese producto; seguir escribiendo crea uno nuevo.
+ */
+function BuscadorProducto({
+  valor,
+  catalogo,
+  alEscribir,
+  alElegir,
+}: {
+  valor: string;
+  catalogo: ProductoCatalogo[];
+  alEscribir: (texto: string) => void;
+  alElegir: (p: ProductoCatalogo) => void;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const [marcada, setMarcada] = useState(0);
+  const idLista = useId();
+  const lista = abierto ? sugerencias(catalogo, valor) : [];
+
+  function elegir(p: ProductoCatalogo) {
+    alElegir(p);
+    setAbierto(false);
+  }
+
+  return (
+    <div className="relative">
+      <input
+        value={valor}
+        onChange={(e) => {
+          alEscribir(e.target.value);
+          setAbierto(true);
+          setMarcada(0);
+        }}
+        onFocus={() => setAbierto(true)}
+        onBlur={() => setAbierto(false)}
+        onKeyDown={(e) => {
+          if (lista.length === 0) return;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setMarcada((m) => (m + 1) % lista.length);
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setMarcada((m) => (m - 1 + lista.length) % lista.length);
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            elegir(lista[marcada]);
+          } else if (e.key === "Escape") {
+            setAbierto(false);
+          }
+        }}
+        placeholder="Escriba para buscar en el inventario…"
+        className={campo}
+        aria-label="Producto"
+        autoComplete="off"
+        role="combobox"
+        aria-expanded={lista.length > 0}
+        aria-controls={idLista}
+      />
+      {lista.length > 0 && (
+        <ul id={idLista} role="listbox" className="absolute top-full left-0 z-30 mt-1 max-h-72 w-full min-w-80 overflow-y-auto rounded-lg bg-white py-1 shadow-lg ring-1 ring-slate-200">
+          {lista.map((p, i) => (
+            <li
+              key={p.id}
+              role="option"
+              aria-selected={i === marcada}
+              // mousedown en vez de click: así se elige antes de que el campo pierda el foco
+              onMouseDown={(e) => {
+                e.preventDefault();
+                elegir(p);
+              }}
+              onMouseEnter={() => setMarcada(i)}
+              className={`cursor-pointer px-3 py-2 ${i === marcada ? "bg-blue-50" : ""}`}
+            >
+              <span className="block text-sm text-slate-900">{p.nombre}</span>
+              <span className="text-xs text-slate-500">
+                <span className="font-mono">{p.codigo}</span> · stock {p.stock}
+              </span>
+            </li>
+          ))}
+          <li className="border-t border-slate-100 px-3 pt-2 pb-1 text-xs text-slate-500">
+            ¿No está? Siga escribiendo y se creará como producto nuevo.
+          </li>
+        </ul>
+      )}
+    </div>
+  );
 }
 
 export function RegistroFoto({
@@ -72,6 +170,7 @@ export function RegistroFoto({
   const [, iniciarCatalogo] = useTransition();
 
   const porCodigo = useMemo(() => new Map(catalogo.map((p) => [p.codigo, p])), [catalogo]);
+  const porNombre = useMemo(() => new Map(catalogo.map((p) => [normalizar(p.nombre), p])), [catalogo]);
   const empresa = empresas.find((e) => e.id === empresaId)!;
 
   const filas = lineas.map((l) => {
@@ -81,11 +180,8 @@ export function RegistroFoto({
     return { ...l, cant, costoNum: costo, total: sub * (1 + numero(l.iva) / 100) };
   });
   const total = filas.reduce((s, f) => s + f.total, 0);
-  const validas = filas.filter((f) => f.codigo.trim() || f.nombre.trim());
-  const completo =
-    proveedor.trim() !== "" &&
-    validas.length > 0 &&
-    validas.every((f) => f.codigo.trim() && f.nombre.trim() && f.cant > 0 && f.costoNum >= 0);
+  const validas = filas.filter((f) => f.nombre.trim());
+  const completo = proveedor.trim() !== "" && validas.length > 0 && validas.every((f) => f.cant > 0 && f.costoNum >= 0);
 
   function cambiarEmpresa(id: string) {
     setEmpresaId(id);
@@ -112,11 +208,11 @@ export function RegistroFoto({
       d.lineas.length
         ? d.lineas.map((l) => {
             const costo = l.precio_incluye_iva && l.iva_porcentaje > 0 ? l.valor_unitario / (1 + l.iva_porcentaje / 100) : l.valor_unitario;
-            // Si el código leído ya existe en el catálogo se usa; si no, se propone uno a partir del nombre
-            const codigo = l.codigo && porCodigo.has(l.codigo) ? l.codigo : l.codigo || codigoDesde(l.descripcion);
+            // Se reconoce el producto por su código o por el mismo nombre; si no, queda nuevo (código automático)
+            const existente = (l.codigo && porCodigo.get(l.codigo)) || porNombre.get(normalizar(l.descripcion));
             return {
-              codigo,
-              nombre: porCodigo.get(codigo)?.nombre ?? l.descripcion,
+              codigo: existente ? existente.codigo : "",
+              nombre: existente ? existente.nombre : l.descripcion,
               cantidad: String(l.cantidad),
               costo: String(Math.round(costo * 100) / 100),
               iva: String(l.iva_porcentaje),
@@ -141,17 +237,12 @@ export function RegistroFoto({
   }
 
   function editar(i: number, cambio: Partial<Linea>) {
-    setLineas((a) =>
-      a.map((l, j) => {
-        if (j !== i) return l;
-        const nueva = { ...l, ...cambio };
-        // Al escribir un código existente se toma su nombre
-        if (cambio.codigo !== undefined && porCodigo.has(cambio.codigo.trim())) {
-          nueva.nombre = porCodigo.get(cambio.codigo.trim())!.nombre;
-        }
-        return nueva;
-      }),
-    );
+    setLineas((a) => a.map((l, j) => (j === i ? { ...l, ...cambio } : l)));
+  }
+
+  /** Al escribir en Producto deja de ser el producto elegido, salvo que el texto sea igual a uno existente. */
+  function escribirNombre(i: number, texto: string) {
+    editar(i, { nombre: texto, codigo: porNombre.get(normalizar(texto))?.codigo ?? "" });
   }
 
   function guardar() {
@@ -277,11 +368,11 @@ export function RegistroFoto({
               )}
             </div>
 
-            <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">
-              <table className="w-full min-w-[820px] text-left text-sm">
+            {/* En pantallas grandes sin recorte, para que las sugerencias del buscador se vean completas */}
+            <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200 lg:overflow-visible">
+              <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Código</th>
                     <th className="px-3 py-2 font-medium">Producto</th>
                     <th className="w-20 px-3 py-2 text-right font-medium">Cant.</th>
                     <th className="w-32 px-3 py-2 text-right font-medium">Costo u. sin IVA</th>
@@ -292,32 +383,27 @@ export function RegistroFoto({
                 </thead>
                 <tbody className="divide-y divide-slate-100 align-top">
                   {filas.map((f, i) => {
-                    const existente = porCodigo.get(f.codigo.trim());
+                    const existente = f.codigo ? porCodigo.get(f.codigo) : undefined;
                     return (
                       <tr key={i}>
                         <td className="px-3 py-2">
-                          <input
-                            value={f.codigo}
-                            onChange={(e) => editar(i, { codigo: e.target.value })}
-                            list="catalogo-foto"
-                            className={`${campo} font-mono`}
-                            aria-label="Código"
+                          <BuscadorProducto
+                            valor={f.nombre}
+                            catalogo={catalogo}
+                            alEscribir={(texto) => escribirNombre(i, texto)}
+                            alElegir={(p) => editar(i, { codigo: p.codigo, nombre: p.nombre })}
                           />
-                          <span
-                            className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                              existente ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
-                            }`}
-                          >
-                            {existente ? `Existente · stock ${existente.stock}` : "Nuevo"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <input
-                            value={f.nombre}
-                            onChange={(e) => editar(i, { nombre: e.target.value })}
-                            className={campo}
-                            aria-label="Nombre"
-                          />
+                          {f.nombre.trim() && (
+                            <span
+                              className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                                existente ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"
+                              }`}
+                            >
+                              {existente
+                                ? `Existente · ${existente.codigo} · stock ${existente.stock}`
+                                : "Nuevo · el código se asigna solo"}
+                            </span>
+                          )}
                         </td>
                         <td className="px-3 py-2">
                           <input
@@ -361,13 +447,6 @@ export function RegistroFoto({
                   })}
                 </tbody>
               </table>
-              <datalist id="catalogo-foto">
-                {catalogo.map((p) => (
-                  <option key={p.id} value={p.codigo}>
-                    {p.nombre}
-                  </option>
-                ))}
-              </datalist>
               <div className="flex items-center justify-between border-t border-slate-100 px-3 py-2">
                 <button onClick={() => setLineas((a) => [...a, lineaVacia()])} className="text-sm font-medium text-blue-700 hover:underline">
                   + Agregar producto
