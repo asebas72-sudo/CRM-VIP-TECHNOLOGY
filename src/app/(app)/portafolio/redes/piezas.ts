@@ -107,7 +107,17 @@ function rectanguloRedondeado(ctx: CanvasRenderingContext2D, x: number, y: numbe
 
 const TEXTO_DISPONIBILIDAD = { disponible: "", pocas: "Pocas unidades", por_pedido: "Por pedido" };
 
-export async function dibujarPieza(canvas: HTMLCanvasElement, item: ItemPieza, marca: MarcaPieza, formato: Formato, conPrecio: boolean) {
+export type MostrarPieza = { logo: boolean; empresa: boolean; whatsapp: boolean };
+const MOSTRAR_TODO: MostrarPieza = { logo: true, empresa: true, whatsapp: true };
+
+export async function dibujarPieza(
+  canvas: HTMLCanvasElement,
+  item: ItemPieza,
+  marca: MarcaPieza,
+  formato: Formato,
+  conPrecio: boolean,
+  mostrar: MostrarPieza = MOSTRAR_TODO,
+) {
   const m = MEDIDAS[formato];
   canvas.width = ANCHO;
   canvas.height = m.alto;
@@ -120,11 +130,13 @@ export async function dibujarPieza(canvas: HTMLCanvasElement, item: ItemPieza, m
   ctx.fillRect(0, 0, ANCHO, m.alto);
 
   // Encabezado con el logo y el nombre de la empresa
-  ctx.fillStyle = marca.color;
-  ctx.fillRect(0, 0, ANCHO, m.encabezado);
+  if (mostrar.logo || mostrar.empresa) {
+    ctx.fillStyle = marca.color;
+    ctx.fillRect(0, 0, ANCHO, m.encabezado);
+  }
   const centro = m.y + (m.encabezado - m.y) / 2;
   let xTexto = MARGEN;
-  const logo = marca.logoUrl ? await cargarImagen(marca.logoUrl) : null;
+  const logo = mostrar.logo && marca.logoUrl ? await cargarImagen(marca.logoUrl) : null;
   if (logo) {
     const h = m.logo;
     const w = Math.min((logo.width / logo.height) * h, 300);
@@ -133,11 +145,13 @@ export async function dibujarPieza(canvas: HTMLCanvasElement, item: ItemPieza, m
     encajar(ctx, logo, logo.width, logo.height, MARGEN + 16, centro - h / 2, w, h);
     xTexto = MARGEN + w + 60;
   }
-  ctx.fillStyle = sobreColor;
-  ctx.textBaseline = "middle";
-  textoAjustado(ctx, marca.empresa, ANCHO - xTexto - MARGEN, "700", formato === "vertical" ? 64 : 52);
-  ctx.fillText(marca.empresa, xTexto, centro);
-  ctx.textBaseline = "alphabetic";
+  if (mostrar.empresa) {
+    ctx.fillStyle = sobreColor;
+    ctx.textBaseline = "middle";
+    textoAjustado(ctx, marca.empresa, ANCHO - xTexto - MARGEN, "700", formato === "vertical" ? 64 : 52);
+    ctx.fillText(marca.empresa, xTexto, centro);
+    ctx.textBaseline = "alphabetic";
+  }
 
   // Foto real o ilustración
   const yImagen = m.encabezado + 30;
@@ -202,7 +216,7 @@ export async function dibujarPieza(canvas: HTMLCanvasElement, item: ItemPieza, m
   ctx.fillRect(0, yPie, ANCHO, m.pie);
   ctx.fillStyle = sobreColor;
   ctx.textBaseline = "middle";
-  const principal = marca.whatsapp ? `Cotice por WhatsApp ${marca.whatsapp}` : "Cotice con nosotros";
+  const principal = mostrar.whatsapp && marca.whatsapp ? `Cotice por WhatsApp ${marca.whatsapp}` : "Cotice con nosotros";
   const altoPie = formato === "vertical" ? 170 : m.pie;
   textoAjustado(ctx, principal, ANCHO - MARGEN * 2, "700", formato === "vertical" ? 50 : 42);
   ctx.textAlign = "center";

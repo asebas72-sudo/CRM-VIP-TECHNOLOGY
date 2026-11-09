@@ -3,13 +3,20 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { botonPrimario, botonSecundario } from "@/components/dialogo";
 import { comprimirImagen } from "@/lib/imagenes";
-import { aBlob, descargarBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza } from "../piezas";
+import { aBlob, descargarBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza, type MostrarPieza } from "../piezas";
 
 const OPCIONES = [
   { valor: "luz", texto: "Mejorar luz, color y nitidez" },
   { valor: "fondo", texto: "Limpiar el fondo" },
   { valor: "oficina", texto: "Ambiente de oficina moderna" },
   { valor: "graficos", texto: "Formas gráficas decorativas en los bordes" },
+];
+
+const ESTILOS = [
+  { nombre: "Profesional", opciones: ["luz", "fondo"] },
+  { nombre: "Natural (solo mejorar la foto)", opciones: ["luz"] },
+  { nombre: "Oficina moderna", opciones: ["luz", "oficina"] },
+  { nombre: "Publicitario", opciones: ["luz", "fondo", "graficos"] },
 ];
 
 type Generar = (form: FormData) => Promise<{ imagen?: string; error?: string }>;
@@ -29,7 +36,8 @@ export function MejorarConIA({
   const ordenados = useMemo(() => [...items].sort((a, b) => Number(b.esServicio) - Number(a.esServicio) || a.nombre.localeCompare(b.nombre)), [items]);
   const [itemId, setItemId] = useState(ordenados[0]?.id ?? "");
   const [foto, setFoto] = useState<{ archivo: File; url: string; ancho: number; alto: number } | null>(null);
-  const [opciones, setOpciones] = useState(["luz"]);
+  const [opciones, setOpciones] = useState(ESTILOS[0].opciones);
+  const [mostrar, setMostrar] = useState<MostrarPieza>({ logo: true, empresa: true, whatsapp: true });
   const [texto, setTexto] = useState("");
   const [resultado, setResultado] = useState<string | null>(null);
   const [conPrecio, setConPrecio] = useState(preciosInicial);
@@ -45,10 +53,10 @@ export function MejorarConIA({
   useEffect(() => {
     if (!pieza || !cuadrada.current || !vertical.current) return;
     Promise.all([
-      dibujarPieza(cuadrada.current, pieza, marca, "cuadrada", conPrecio),
-      dibujarPieza(vertical.current, pieza, marca, "vertical", conPrecio),
+      dibujarPieza(cuadrada.current, pieza, marca, "cuadrada", conPrecio, mostrar),
+      dibujarPieza(vertical.current, pieza, marca, "vertical", conPrecio, mostrar),
     ]).catch(() => setError("No se pudo armar la pieza."));
-  }, [pieza, marca, conPrecio]);
+  }, [pieza, marca, conPrecio, mostrar]);
 
   async function elegirFoto(f: File | undefined) {
     if (!f) return;
@@ -128,6 +136,23 @@ export function MejorarConIA({
           />
         </label>
         <fieldset className="space-y-2 text-sm text-slate-700">
+          <legend className="font-medium">Estilo predefinido</legend>
+          <div className="flex flex-wrap gap-2">
+            {ESTILOS.map((e) => (
+              <button
+                key={e.nombre}
+                type="button"
+                onClick={() => setOpciones(e.opciones)}
+                className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${
+                  [...e.opciones].sort().join() === [...opciones].sort().join() ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-slate-700 ring-slate-300"
+                }`}
+              >
+                {e.nombre}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+        <fieldset className="space-y-2 text-sm text-slate-700">
           <legend className="font-medium">Qué hacer</legend>
           {OPCIONES.map((o) => (
             <label key={o.valor} className="flex items-center gap-2">
@@ -143,6 +168,7 @@ export function MejorarConIA({
         </fieldset>
         <label className="block text-sm font-medium text-slate-700">
           Indicación adicional (opcional)
+          <span className="block text-xs font-normal text-slate-500">El logo, el nombre y el WhatsApp los pone el sistema; no hace falta pedirlos aquí.</span>
           <textarea
             rows={3}
             maxLength={300}
@@ -191,10 +217,33 @@ export function MejorarConIA({
 
         {pieza && (
           <div className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input type="checkbox" checked={conPrecio} onChange={(e) => setConPrecio(e.target.checked)} className="size-4" />
-              Mostrar precio
-            </label>
+            <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-700">
+              <legend className="mb-2 font-medium">Incluir en la imagen</legend>
+              {(
+                [
+                  ["logo", "Logo"],
+                  ["empresa", "Nombre de la empresa"],
+                  ["whatsapp", "WhatsApp"],
+                ] as const
+              ).map(([clave, nombre]) => (
+                <label key={clave} className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={mostrar[clave]}
+                    onChange={(e) => setMostrar((m) => ({ ...m, [clave]: e.target.checked }))}
+                    className="size-4"
+                  />
+                  {nombre}
+                </label>
+              ))}
+              <label className="flex items-center gap-2">
+                <input type="checkbox" checked={conPrecio} onChange={(e) => setConPrecio(e.target.checked)} className="size-4" />
+                Precio
+              </label>
+            </fieldset>
+            {mostrar.logo && !marca.logoUrl && (
+              <p className="text-sm text-amber-800">Esta empresa aún no tiene logo. Súbalo en Portafolio para que aparezca.</p>
+            )}
             <div className="flex flex-wrap items-start gap-5">
               <figure className="w-72 max-w-full space-y-2">
                 <canvas ref={cuadrada} className="w-full rounded-lg ring-1 ring-slate-200" aria-label="Imagen cuadrada" />
