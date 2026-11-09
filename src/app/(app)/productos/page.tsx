@@ -91,6 +91,7 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
     )
     .eq("empresa_id", activa.id)
     .eq("activo", filtro !== "inactivos")
+    .eq("es_servicio", false)
     .order("nombre")
     .limit(500);
 

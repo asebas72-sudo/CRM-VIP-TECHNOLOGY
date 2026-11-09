@@ -179,6 +179,7 @@ export async function construirInforme(
     supabase
       .from("productos")
       .select("id, empresa_id, codigo, nombre, stock, stock_minimo, costo_promedio, precio_venta, iva_porcentaje, categorias (nombre)")
+      .eq("es_servicio", false)
       .in("empresa_id", ids)
       .eq("activo", true)
       .limit(20000),

@@ -19,6 +19,7 @@ export async function StockPorEmpresa({
     .from("productos")
     .select("empresa_id, codigo, nombre, precio_venta, stock")
     .in("empresa_id", empresas.map((e) => e.id))
+    .eq("es_servicio", false)
     .eq("activo", true)
     .order("nombre")
     .limit(5000);

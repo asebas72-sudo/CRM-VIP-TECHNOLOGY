@@ -3,6 +3,7 @@
 import {
   ArrowLeftRight,
   BarChart3,
+  BriefcaseBusiness,
   Building2,
   CalendarClock,
   CalendarPlus,
@@ -17,6 +18,7 @@ import {
   Settings,
   ShoppingCart,
   SlidersHorizontal,
+  Store,
   Truck,
   Users,
   Wallet,
@@ -44,6 +46,8 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/compras", texto: "Compras", icono: Truck, roles: ["admin", "bodega"] },
       { href: "/facturas-compra", texto: "Facturas compras", icono: MailCheck, roles: TODOS, soloAccesoTotal: true },
       { href: "/etiquetas", texto: "Etiquetas QR", icono: QrCode, roles: ["admin", "bodega"] },
+      { href: "/mis-servicios", texto: "Servicios", icono: BriefcaseBusiness, roles: ["admin"] },
+      { href: "/portafolio", texto: "Portafolio", icono: Store, roles: ["admin"] },
       { href: "/informes", texto: "Informes", icono: BarChart3, roles: ["admin"] },
       {
         texto: "Configuración",

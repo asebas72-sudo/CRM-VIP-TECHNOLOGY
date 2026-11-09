@@ -21,6 +21,7 @@ export async function catalogoEmpresa(empresaId: string): Promise<ProductoCatalo
   const { data } = await supabase
     .from("productos")
     .select("id, codigo, nombre, stock")
+    .eq("es_servicio", false)
     .eq("empresa_id", empresa.id)
     .order("nombre");
   return (data ?? []) as ProductoCatalogo[];
@@ -95,7 +96,7 @@ async function asignarCodigos(
 ): Promise<LineaManual[]> {
   if (lineas.every((l) => l.codigo.trim())) return lineas;
 
-  const { data } = await supabase.from("productos").select("codigo, nombre").eq("empresa_id", empresaId);
+  const { data } = await supabase.from("productos").select("codigo, nombre").eq("empresa_id", empresaId).eq("es_servicio", false);
   const productos = data ?? [];
   const porNombre = new Map(productos.map((p) => [nombreComparable(p.nombre), p.codigo]));
   let ultimo = productos.reduce((max, p) => {

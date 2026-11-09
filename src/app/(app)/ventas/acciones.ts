@@ -12,6 +12,7 @@ export type ProductoVenta = {
   stock: number;
   maneja_serial: boolean;
   ubicacion: string | null;
+  es_servicio: boolean;
 };
 
 /**
@@ -24,7 +25,7 @@ export async function buscarProductos(texto: string): Promise<{ exacto: boolean;
   if (!activa || !q) return { exacto: false, productos: [] };
 
   const supabase = await crearClienteServidor();
-  const columnas = "id, codigo, nombre, precio_venta, stock, maneja_serial, ubicacion";
+  const columnas = "id, codigo, nombre, precio_venta, stock, maneja_serial, ubicacion, es_servicio";
 
   const { data: exacto } = await supabase
     .from("productos")

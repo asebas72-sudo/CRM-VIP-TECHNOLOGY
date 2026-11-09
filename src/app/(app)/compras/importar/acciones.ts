@@ -91,6 +91,7 @@ export async function analizarFactura(_: EstadoAnalisis, form: FormData): Promis
     supabase
       .from("productos")
       .select("id, codigo, nombre, stock")
+      .eq("es_servicio", false)
       .eq("empresa_id", empresa.id)
       .order("nombre"),
   ]);

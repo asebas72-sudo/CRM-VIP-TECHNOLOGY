@@ -10,6 +10,7 @@ export default async function PaginaEtiquetas({ searchParams }: PageProps<"/etiq
   const { data, error } = await supabase
     .from("productos")
     .select("id, codigo, nombre, precio_venta, stock")
+    .eq("es_servicio", false)
     .eq("empresa_id", activa.id)
     .eq("activo", true)
     .order("nombre")

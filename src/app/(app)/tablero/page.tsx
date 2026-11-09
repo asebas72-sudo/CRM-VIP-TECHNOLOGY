@@ -35,6 +35,7 @@ export default async function TableroVentas() {
     supabase
       .from("productos")
       .select("id, nombre, codigo, stock, stock_minimo, costo_promedio, precio_venta")
+      .eq("es_servicio", false)
       .eq("empresa_id", activa.id)
       .eq("activo", true)
       .order("nombre"),

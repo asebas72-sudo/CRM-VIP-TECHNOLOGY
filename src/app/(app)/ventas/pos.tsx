@@ -69,7 +69,7 @@ export function PuntoDeVenta() {
   const aCredito = tipo !== "contado";
   const clienteValido = clienteCompleto(cliente) && (!aCredito || cliente.tipo !== "generico");
   const faltanSeriales = lineas.some((l) => l.producto.maneja_serial && l.seriales.length !== l.cantidad);
-  const sinStock = lineas.some((l) => l.cantidad > l.producto.stock);
+  const sinStock = lineas.some((l) => !l.producto.es_servicio && l.cantidad > l.producto.stock);
 
   function enfocar() {
     setTimeout(() => entrada.current?.focus(), 0);
@@ -217,8 +217,8 @@ export function PuntoDeVenta() {
                   </span>
                   <span className="shrink-0 text-right">
                     <span className="block font-semibold tabular-nums">{pesos(p.precio_venta)}</span>
-                    <span className={`text-xs ${p.stock > 0 ? "text-slate-500" : "font-semibold text-red-600"}`}>
-                      Stock {p.stock}
+                    <span className={`text-xs ${p.es_servicio || p.stock > 0 ? "text-slate-500" : "font-semibold text-red-600"}`}>
+                      {p.es_servicio ? "Servicio" : `Stock ${p.stock}`}
                     </span>
                   </span>
                 </button>
@@ -249,7 +249,7 @@ export function PuntoDeVenta() {
                     <td className="px-3 py-2">
                       <p className="font-medium text-slate-900">{l.producto.nombre}</p>
                       <p className="font-mono text-xs text-slate-500">{l.producto.codigo}</p>
-                      {l.cantidad > l.producto.stock && (
+                      {!l.producto.es_servicio && l.cantidad > l.producto.stock && (
                         <p className="text-xs font-semibold text-red-600">Solo hay {l.producto.stock} en stock</p>
                       )}
                       {l.producto.maneja_serial && (

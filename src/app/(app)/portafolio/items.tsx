@@ -1,0 +1,173 @@
+"use client";
+
+import { ImagePlus } from "lucide-react";
+import { useMemo, useState, useTransition } from "react";
+import { pesos } from "@/lib/formato";
+import { comprimirImagen } from "@/lib/imagenes";
+import { urlImagenPortafolio } from "@/lib/portafolio";
+import { guardarItem } from "./acciones";
+
+export type ItemPortafolio = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precio_venta: number;
+  stock: number;
+  es_servicio: boolean;
+  publicar_portafolio: boolean;
+  descripcion_comercial: string | null;
+  foto_path: string | null;
+  etiqueta_portafolio: "oferta" | "nuevo" | null;
+};
+
+const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function Fila({ item }: { item: ItemPortafolio }) {
+  const [publicar, setPublicar] = useState(item.publicar_portafolio);
+  const [etiqueta, setEtiqueta] = useState(item.etiqueta_portafolio ?? "");
+  const [descripcion, setDescripcion] = useState(item.descripcion_comercial ?? "");
+  const [foto, setFoto] = useState(item.foto_path);
+  const [error, setError] = useState<string>();
+  const [guardando, iniciar] = useTransition();
+
+  type Cambios = { publicar?: boolean; etiqueta?: string; archivo?: File; quitarFoto?: boolean };
+
+  function guardar(c: Cambios = {}) {
+    const datos = new FormData();
+    datos.set("id", item.id);
+    datos.set("publicar", String(c.publicar ?? publicar));
+    datos.set("etiqueta", c.etiqueta ?? etiqueta);
+    datos.set("descripcion", descripcion);
+    if (c.archivo) datos.set("foto", c.archivo);
+    if (c.quitarFoto) datos.set("quitar_foto", "true");
+    setError(undefined);
+    iniciar(async () => {
+      const r = await guardarItem(datos);
+      if (r.error) setError(r.error);
+      else if (r.foto_path !== undefined) setFoto(r.foto_path);
+    });
+  }
+
+  async function elegirFoto(archivo: File | undefined) {
+    if (!archivo) return;
+    guardar({ archivo: await comprimirImagen(archivo, 1200) });
+  }
+
+  const url = urlImagenPortafolio(foto);
+
+  return (
+    <li className="flex flex-wrap items-start gap-4 px-4 py-3">
+      <label className="relative flex size-20 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-lg bg-slate-100 ring-1 ring-slate-200 hover:ring-blue-400">
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element -- imagen pública de Supabase
+          <img src={url} alt={item.nombre} className="size-full object-cover" />
+        ) : (
+          <ImagePlus className="size-6 text-slate-400" aria-hidden />
+        )}
+        <span className="sr-only">Cambiar foto de {item.nombre}</span>
+        <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => elegirFoto(e.target.files?.[0])} />
+      </label>
+
+      <div className="min-w-60 flex-1 space-y-2">
+        <div>
+          <p className="font-medium text-slate-900">{item.nombre}</p>
+          <p className="text-xs text-slate-500">
+            <span className="font-mono">{item.codigo}</span> · {pesos(item.precio_venta)} ·{" "}
+            {item.es_servicio ? "Servicio" : `Stock ${item.stock}`}
+            {url && (
+              <button type="button" onClick={() => guardar({ quitarFoto: true })} className="ml-2 text-red-700 hover:underline">
+                Quitar foto
+              </button>
+            )}
+          </p>
+        </div>
+        <textarea
+          rows={2}
+          value={descripcion}
+          onChange={(e) => setDescripcion(e.target.value)}
+          onBlur={() => {
+            if (descripcion !== (item.descripcion_comercial ?? "")) guardar();
+          }}
+          placeholder="Descripción comercial para el cliente"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
+          aria-label={`Descripción de ${item.nombre}`}
+        />
+        {error && <p className="text-sm text-red-700">{error}</p>}
+      </div>
+
+      <div className="flex w-36 flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+          <input
+            type="checkbox"
+            checked={publicar}
+            onChange={(e) => {
+              setPublicar(e.target.checked);
+              guardar({ publicar: e.target.checked });
+            }}
+            className="size-4"
+          />
+          Publicar
+        </label>
+        <select
+          value={etiqueta}
+          onChange={(e) => {
+            setEtiqueta(e.target.value);
+            guardar({ etiqueta: e.target.value });
+          }}
+          className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm"
+          aria-label={`Etiqueta de ${item.nombre}`}
+        >
+          <option value="">Sin etiqueta</option>
+          <option value="oferta">Oferta</option>
+          <option value="nuevo">Nuevo</option>
+        </select>
+        <span className={`text-xs text-slate-500 ${guardando ? "" : "invisible"}`}>Guardando…</span>
+      </div>
+    </li>
+  );
+}
+
+export function ListaItems({ items }: { items: ItemPortafolio[] }) {
+  const [texto, setTexto] = useState("");
+  const [filtro, setFiltro] = useState("todos");
+
+  const lista = useMemo(() => {
+    const palabras = normalizar(texto).split(/\s+/).filter(Boolean);
+    return items.filter((i) => {
+      if (filtro === "productos" && i.es_servicio) return false;
+      if (filtro === "servicios" && !i.es_servicio) return false;
+      if (filtro === "publicados" && !i.publicar_portafolio) return false;
+      const donde = normalizar(`${i.nombre} ${i.codigo}`);
+      return palabras.every((p) => donde.includes(p));
+    });
+  }, [items, texto, filtro]);
+
+  return (
+    <section className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          placeholder="Buscar producto o servicio..."
+          autoComplete="off"
+          className="min-w-64 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2"
+        />
+        <select value={filtro} onChange={(e) => setFiltro(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-2">
+          <option value="todos">Todos</option>
+          <option value="productos">Productos</option>
+          <option value="servicios">Servicios</option>
+          <option value="publicados">Publicados</option>
+        </select>
+      </div>
+      {lista.length === 0 ? (
+        <p className="rounded-2xl bg-white p-10 text-center text-slate-500 ring-1 ring-slate-200">No hay productos que coincidan.</p>
+      ) : (
+        <ul className="divide-y divide-slate-100 rounded-2xl bg-white ring-1 ring-slate-200">
+          {lista.map((i) => (
+            <Fila key={i.id} item={i} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
