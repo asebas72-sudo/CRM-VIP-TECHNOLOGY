@@ -8,6 +8,7 @@ import { comprimirImagen as comprimir } from "@/lib/imagenes";
 import type { DocumentoLeido } from "@/lib/facturas/foto";
 import { verCompra, type ProductoCatalogo, type ResultadoImportacion } from "../importar/acciones";
 import { catalogoEmpresa, guardarCompraManual, leerFoto, type CompraManual } from "./acciones";
+import { construirPlantilla, leerPlantilla } from "./excel";
 
 /** codigo: el del producto existente elegido en el buscador; vacío = producto nuevo (el sistema le pone código). */
 type Linea = { codigo: string; nombre: string; cantidad: string; costo: string; iva: string };
@@ -23,6 +24,8 @@ const TIPOS_DOC = [
 
 const campo = "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm";
 const numero = (v: string) => Number(v.replace(/\./g, "").replace(",", ".")) || 0;
+/** Número a texto del formulario: `numero()` toma el punto como separador de miles, el decimal va con coma. */
+const aCampo = (n: number) => String(n).replace(".", ",");
 const lineaVacia = (): Linea => ({ codigo: "", nombre: "", cantidad: "1", costo: "", iva: "0" });
 
 /** Texto para buscar: sin tildes, en minúsculas y sin espacios de más. */
@@ -162,6 +165,7 @@ export function RegistroFoto({
   const [lineas, setLineas] = useState<Linea[]>([lineaVacia()]);
 
   const [error, setError] = useState<string>();
+  const [procesandoExcel, setProcesandoExcel] = useState(false);
   const [confirmando, setConfirmando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoImportacion | null>(null);
   const [leyendo, iniciarLectura] = useTransition();
@@ -213,14 +217,63 @@ export function RegistroFoto({
             return {
               codigo: existente ? existente.codigo : "",
               nombre: existente ? existente.nombre : l.descripcion,
-              cantidad: String(l.cantidad),
-              costo: String(Math.round(costo * 100) / 100),
+              cantidad: aCampo(l.cantidad),
+              costo: aCampo(Math.round(costo * 100) / 100),
               iva: String(l.iva_porcentaje),
             };
           })
         : [lineaVacia()],
     );
     setFormularioVisible(true);
+  }
+
+  async function descargarPlantilla() {
+    setProcesandoExcel(true);
+    try {
+      const contenido = await construirPlantilla(catalogo);
+      const enlace = document.createElement("a");
+      enlace.href = URL.createObjectURL(
+        new Blob([contenido], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+      );
+      enlace.download = `Plantilla compra ${empresa.nombre}.xlsx`;
+      enlace.click();
+      URL.revokeObjectURL(enlace.href);
+    } catch {
+      setError("No se pudo generar la plantilla. Intente de nuevo.");
+    } finally {
+      setProcesandoExcel(false);
+    }
+  }
+
+  async function subirExcel(f: File | undefined) {
+    if (!f) return;
+    setProcesandoExcel(true);
+    try {
+      const { lineas: leidas, errores } = await leerPlantilla(f);
+      if (leidas.length === 0) {
+        setError(errores.join(" ") || "El Excel no tiene productos.");
+        return;
+      }
+      setLineas(
+        leidas.map((l) => {
+          const existente = porNombre.get(normalizar(l.nombre));
+          return {
+            codigo: existente?.codigo ?? "",
+            nombre: existente?.nombre ?? l.nombre,
+            cantidad: aCampo(l.cantidad),
+            costo: aCampo(l.costo),
+            iva: String(l.iva),
+          };
+        }),
+      );
+      setObservaciones(errores.length ? `Estas filas del Excel no se cargaron: ${errores.join(" ")}` : "");
+      setTotalLeido(null);
+      setFormularioVisible(true);
+    } catch {
+      setError("No se pudo leer el Excel. Verifique que sea la plantilla en formato .xlsx.");
+    } finally {
+      setProcesandoExcel(false);
+    }
   }
 
   function leer() {
@@ -307,6 +360,30 @@ export function RegistroFoto({
               Escribir a mano
             </button>
           )}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white px-5 py-4 ring-1 ring-slate-200">
+        <div>
+          <p className="text-sm font-medium text-slate-700">Cargar los productos desde Excel</p>
+          <p className="text-xs text-slate-500">Descargue la plantilla, llénela y súbala. Podrá revisar todo antes de guardar.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={descargarPlantilla} disabled={procesandoExcel} className={`${botonSecundario} py-2.5`}>
+            Descargar plantilla
+          </button>
+          <label className={`${botonPrimario} cursor-pointer py-2.5 ${procesandoExcel ? "pointer-events-none opacity-60" : ""}`}>
+            {procesandoExcel ? "Procesando..." : "Subir Excel"}
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              className="sr-only"
+              onChange={(e) => {
+                subirExcel(e.target.files?.[0]);
+                e.target.value = ""; // permite subir de nuevo el mismo archivo corregido
+              }}
+            />
+          </label>
         </div>
       </div>
 
@@ -480,7 +557,7 @@ export function RegistroFoto({
       <Dialogo
         abierto={Boolean(error)}
         tono="error"
-        titulo="No se pudo leer el documento"
+        titulo="No se pudo procesar el archivo"
         alCerrar={() => setError(undefined)}
         acciones={
           <>
