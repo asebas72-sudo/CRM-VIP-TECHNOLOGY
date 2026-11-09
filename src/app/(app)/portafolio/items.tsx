@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
+import { botonPrimario, botonSecundario, Dialogo } from "@/components/dialogo";
 import { IlustracionProducto } from "@/components/ilustracion-producto";
 import { pesos } from "@/lib/formato";
 import { comprimirImagen } from "@/lib/imagenes";
 import { urlImagenPortafolio } from "@/lib/portafolio";
-import { guardarItem } from "./acciones";
+import { guardarItem, publicarTodos } from "./acciones";
 
 export type ItemPortafolio = {
   id: string;
@@ -24,6 +26,12 @@ const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 
 function Fila({ item }: { item: ItemPortafolio }) {
   const [publicar, setPublicar] = useState(item.publicar_portafolio);
+  // "Publicar todos" cambia el dato desde el servidor: la casilla debe seguirlo
+  const [publicadoPrevio, setPublicadoPrevio] = useState(item.publicar_portafolio);
+  if (item.publicar_portafolio !== publicadoPrevio) {
+    setPublicadoPrevio(item.publicar_portafolio);
+    setPublicar(item.publicar_portafolio);
+  }
   const [etiqueta, setEtiqueta] = useState(item.etiqueta_portafolio ?? "");
   const [descripcion, setDescripcion] = useState(item.descripcion_comercial ?? "");
   const [foto, setFoto] = useState(item.foto_path);
@@ -130,6 +138,23 @@ function Fila({ item }: { item: ItemPortafolio }) {
 export function ListaItems({ items }: { items: ItemPortafolio[] }) {
   const [texto, setTexto] = useState("");
   const [filtro, setFiltro] = useState("todos");
+  const [confirmar, setConfirmar] = useState<"publicar" | "quitar" | null>(null);
+  const [aviso, setAviso] = useState<{ ok: boolean; texto: string }>();
+  const [aplicando, iniciarMasivo] = useTransition();
+  const publicados = items.filter((i) => i.publicar_portafolio).length;
+
+  function aplicarATodos() {
+    const publicar = confirmar === "publicar";
+    iniciarMasivo(async () => {
+      const r = await publicarTodos(publicar);
+      setConfirmar(null);
+      setAviso(
+        r.error
+          ? { ok: false, texto: r.error }
+          : { ok: true, texto: publicar ? `${r.cantidad} publicados` : `${r.cantidad} retirados del portafolio` },
+      );
+    });
+  }
 
   const lista = useMemo(() => {
     const palabras = normalizar(texto).split(/\s+/).filter(Boolean);
@@ -144,6 +169,23 @@ export function ListaItems({ items }: { items: ItemPortafolio[] }) {
 
   return (
     <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
+        <p className="text-sm text-slate-600">
+          <strong className="text-slate-900">{publicados}</strong> de {items.length} publicados
+          {aviso && <span className={`ml-3 ${aviso.ok ? "text-green-700" : "text-red-700"}`}>{aviso.texto}</span>}
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/portafolio/redes" className={botonSecundario}>
+            Imágenes para redes
+          </Link>
+          <button type="button" onClick={() => setConfirmar("quitar")} className={botonSecundario}>
+            Quitar todos
+          </button>
+          <button type="button" onClick={() => setConfirmar("publicar")} className={botonPrimario}>
+            Publicar todos
+          </button>
+        </div>
+      </div>
       <div className="flex flex-wrap gap-2">
         <input
           value={texto}
@@ -168,6 +210,28 @@ export function ListaItems({ items }: { items: ItemPortafolio[] }) {
           ))}
         </ul>
       )}
+
+      <Dialogo
+        abierto={confirmar !== null}
+        titulo={confirmar === "publicar" ? "¿Publicar todos?" : "¿Quitar todos del portafolio?"}
+        alCerrar={aplicando ? undefined : () => setConfirmar(null)}
+        acciones={
+          <>
+            <button className={botonSecundario} onClick={() => setConfirmar(null)} disabled={aplicando}>
+              Cancelar
+            </button>
+            <button className={botonPrimario} onClick={aplicarATodos} disabled={aplicando}>
+              {aplicando ? "Aplicando..." : "Sí, aplicar"}
+            </button>
+          </>
+        }
+      >
+        <p>
+          {confirmar === "publicar"
+            ? `Los ${items.length} productos y servicios activos quedarán visibles en el portafolio. Después puede quitar los que no quiera.`
+            : "Ningún producto ni servicio se verá en el portafolio hasta que los publique de nuevo."}
+        </p>
+      </Dialogo>
     </section>
   );
 }

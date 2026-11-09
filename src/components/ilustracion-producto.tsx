@@ -68,6 +68,13 @@ const ICONOS: Record<TipoIlustracion, LucideIcon> = {
 // Segundo dibujo para distinguir el combo del teclado solo y el cargador del enchufe
 const SEGUNDO_ICONO: Partial<Record<TipoIlustracion, LucideIcon>> = { combo: Mouse, cargador: Zap };
 
+/** Dibujos de la ilustración de un producto (para generar imágenes). */
+export function iconosIlustracion(nombre: string, esServicio = false): LucideIcon[] {
+  const tipo = tipoIlustracion(nombre, esServicio);
+  const segundo = SEGUNDO_ICONO[tipo];
+  return segundo ? [ICONOS[tipo], segundo] : [ICONOS[tipo]];
+}
+
 /** Ilustración que se muestra mientras el producto o servicio no tenga foto real. */
 export function IlustracionProducto({
   nombre,

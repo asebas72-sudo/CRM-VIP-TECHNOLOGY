@@ -73,6 +73,21 @@ export async function guardarConfiguracion(form: FormData): Promise<{ error?: st
   return { ok: true };
 }
 
+/** Publica o retira de una vez todos los productos y servicios activos de la empresa. */
+export async function publicarTodos(publicar: boolean): Promise<{ error?: string; cantidad?: number }> {
+  const { activa } = await exigirRol("admin");
+  const supabase = await crearClienteServidor();
+  const { data, error } = await supabase
+    .from("productos")
+    .update({ publicar_portafolio: publicar, actualizado_en: new Date().toISOString() })
+    .eq("empresa_id", activa.id)
+    .eq("activo", true)
+    .select("id");
+  if (error) return { error: error.message };
+  revalidatePath("/portafolio");
+  return { cantidad: data?.length ?? 0 };
+}
+
 /** Publicar, etiqueta, descripción y foto de un producto o servicio. */
 export async function guardarItem(form: FormData): Promise<{ error?: string; foto_path?: string | null }> {
   const { activa } = await exigirRol("admin");
