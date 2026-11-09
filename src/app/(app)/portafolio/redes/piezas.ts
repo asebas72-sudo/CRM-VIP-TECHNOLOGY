@@ -241,6 +241,14 @@ export function nombreArchivo(item: ItemPieza, formato: Formato): string {
   return `${base}-${formato}.jpg`;
 }
 
+export function descargarBlob(blob: Blob, nombre: string) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = nombre;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 export function aBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((listo, fallo) => canvas.toBlob((b) => (b ? listo(b) : fallo(new Error("No se pudo crear la imagen"))), "image/jpeg", 0.92));
 }

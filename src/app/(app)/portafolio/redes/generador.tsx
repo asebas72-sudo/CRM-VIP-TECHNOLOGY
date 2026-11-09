@@ -2,17 +2,9 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { botonPrimario, botonSecundario } from "@/components/dialogo";
-import { aBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza } from "./piezas";
+import { aBlob, descargarBlob as descargar, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza } from "./piezas";
 
 const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-
-function descargar(blob: Blob, nombre: string) {
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = nombre;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
 
 export function GeneradorRedes({ items, marca, preciosInicial }: { items: ItemPieza[]; marca: MarcaPieza; preciosInicial: boolean }) {
   const [texto, setTexto] = useState("");
