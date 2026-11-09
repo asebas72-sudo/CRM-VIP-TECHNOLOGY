@@ -3,6 +3,7 @@ import { sesionActual } from "@/lib/empresa";
 import { cantidad, pesos } from "@/lib/formato";
 import { crearClienteServidor } from "@/lib/supabase/server";
 import { margen } from "@/lib/precios";
+import { FormularioBusqueda } from "./busqueda";
 import { EditorPrecio } from "./precio";
 import { StockPorEmpresa } from "./stock-por-empresa";
 
@@ -66,17 +67,17 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
           </div>
           {pestanas}
         </div>
-        <form className="flex flex-wrap gap-2">
+        <FormularioBusqueda>
           <input type="hidden" name="vista" value="todas" />
           <input
             name="q"
             defaultValue={q}
             autoFocus
+            autoComplete="off"
             placeholder="Buscar o escanear código..."
             className="min-w-64 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2"
           />
-          <button className="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white">Buscar</button>
-        </form>
+        </FormularioBusqueda>
         <StockPorEmpresa empresas={todas.map((e) => ({ id: e.id, nombre: e.nombre }))} q={q} />
       </div>
     );
@@ -127,11 +128,12 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
         {pestanas}
       </div>
 
-      <form className="flex flex-wrap gap-2">
+      <FormularioBusqueda>
         <input
           name="q"
           defaultValue={q}
           autoFocus
+          autoComplete="off"
           placeholder="Buscar o escanear código..."
           className="min-w-64 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2"
         />
@@ -142,8 +144,7 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
             </option>
           ))}
         </select>
-        <button className="rounded-lg bg-slate-900 px-4 py-2 font-semibold text-white">Buscar</button>
-      </form>
+      </FormularioBusqueda>
 
       <div className="max-h-[calc(100vh-15rem)] overflow-auto rounded-2xl bg-white ring-1 ring-slate-200">
         <table className="w-full min-w-[820px] text-left text-sm">
