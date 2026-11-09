@@ -4,7 +4,7 @@ import { ListaServicios, type Servicio } from "./lista";
 
 /** Servicios que vende la empresa (reparación, instalación, asesoría...). Solo administradores. */
 export default async function PaginaServicios() {
-  const { activa } = await exigirRol("admin");
+  const { activa, todas } = await exigirRol("admin");
   const supabase = await crearClienteServidor();
   const { data, error } = await supabase
     .from("productos")
@@ -30,7 +30,10 @@ export default async function PaginaServicios() {
           Los servicios tienen precio, se venden en <strong>Vender</strong> y no manejan inventario.
         </p>
       </div>
-      <ListaServicios servicios={(data ?? []) as Servicio[]} />
+      <ListaServicios
+        servicios={(data ?? []) as Servicio[]}
+        empresas={todas.filter((e) => e.rol === "admin").map((e) => ({ id: e.id, nombre: e.nombre }))}
+      />
     </div>
   );
 }

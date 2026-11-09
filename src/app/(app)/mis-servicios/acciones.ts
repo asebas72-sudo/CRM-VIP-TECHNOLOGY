@@ -26,33 +26,64 @@ function refrescar() {
   revalidatePath("/portafolio");
 }
 
-/** Crea un servicio con código automático (S00001, S00002...). */
-export async function crearServicio(d: DatosServicio): Promise<{ error?: string }> {
-  const { activa } = await exigirRol("admin");
+/**
+ * Crea el servicio en cada empresa elegida, con el código automático de cada una
+ * (S00001, S00002...). Donde ya exista un servicio con ese nombre no se duplica.
+ */
+export async function crearServicio(d: DatosServicio, empresaIds: string[]): Promise<{ error?: string; resumen?: string }> {
+  const { todas } = await exigirRol("admin");
   const problema = validar(d);
   if (problema) return { error: problema };
 
-  const supabase = await crearClienteServidor();
-  const { data } = await supabase.from("productos").select("codigo").eq("empresa_id", activa.id).like("codigo", "S%");
-  const ultimo = (data ?? []).reduce((max, p) => {
-    const m = /^S(\d+)$/.exec(p.codigo);
-    return m ? Math.max(max, Number(m[1])) : max;
-  }, 0);
+  const empresas = todas.filter((e) => e.rol === "admin" && empresaIds.includes(e.id));
+  if (empresas.length === 0) return { error: "Elija al menos una empresa." };
 
-  const { error } = await supabase.from("productos").insert({
-    empresa_id: activa.id,
-    codigo: `S${String(ultimo + 1).padStart(5, "0")}`,
-    nombre: d.nombre.trim(),
-    descripcion_comercial: d.descripcion.trim() || null,
-    precio_venta: Math.round(d.precio),
-    iva_porcentaje: d.iva,
-    publicar_portafolio: d.publicar,
-    es_servicio: true,
-    maneja_serial: false,
-  });
-  if (error) return { error: error.message };
+  const supabase = await crearClienteServidor();
+  const nombre = d.nombre.trim();
+  const creadas: string[] = [];
+  const omitidas: string[] = [];
+  const errores: string[] = [];
+
+  for (const empresa of empresas) {
+    const { data, error: errorLectura } = await supabase
+      .from("productos")
+      .select("codigo, nombre, es_servicio")
+      .eq("empresa_id", empresa.id)
+      .or("codigo.like.S%,es_servicio.eq.true");
+    if (errorLectura) {
+      errores.push(`${empresa.nombre}: ${errorLectura.message}`);
+      continue;
+    }
+    if ((data ?? []).some((p) => p.es_servicio && p.nombre.trim().toLowerCase() === nombre.toLowerCase())) {
+      omitidas.push(empresa.nombre);
+      continue;
+    }
+    const ultimo = (data ?? []).reduce((max, p) => {
+      const m = /^S(\d+)$/.exec(p.codigo);
+      return m ? Math.max(max, Number(m[1])) : max;
+    }, 0);
+
+    const { error } = await supabase.from("productos").insert({
+      empresa_id: empresa.id,
+      codigo: `S${String(ultimo + 1).padStart(5, "0")}`,
+      nombre,
+      descripcion_comercial: d.descripcion.trim() || null,
+      precio_venta: Math.round(d.precio),
+      iva_porcentaje: d.iva,
+      publicar_portafolio: d.publicar,
+      es_servicio: true,
+      maneja_serial: false,
+    });
+    if (error) errores.push(`${empresa.nombre}: ${error.message}`);
+    else creadas.push(empresa.nombre);
+  }
+
   refrescar();
-  return {};
+  const partes = [
+    creadas.length ? `Creado en: ${creadas.join(", ")}.` : "",
+    omitidas.length ? `Ya existía en: ${omitidas.join(", ")}.` : "",
+  ].filter(Boolean);
+  return { resumen: partes.join(" ") || undefined, error: errores.length ? errores.join(" ") : undefined };
 }
 
 export async function actualizarServicio(id: string, d: DatosServicio): Promise<{ error?: string }> {

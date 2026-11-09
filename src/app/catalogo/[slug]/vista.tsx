@@ -1,7 +1,8 @@
 "use client";
 
-import { Briefcase, Mail, MapPin, MessageCircle, Package } from "lucide-react";
+import { Mail, MapPin, MessageCircle } from "lucide-react";
 import { useMemo, useState } from "react";
+import { IlustracionProducto } from "@/components/ilustracion-producto";
 import { pesos } from "@/lib/formato";
 import { urlImagenPortafolio, type ItemPublico, type PortafolioPublico } from "@/lib/portafolio";
 import { enlaceWhatsapp } from "@/lib/servicio";
@@ -27,7 +28,6 @@ function Tarjeta({ item, p }: { item: ItemPublico; p: PortafolioPublico }) {
   const foto = urlImagenPortafolio(item.foto_path);
   const disp = DISPONIBILIDAD[item.disponibilidad];
   const cotizar = enlaceWhatsapp(p.whatsapp, `Hola, ${p.empresa}. Me interesa cotizar: ${item.nombre}`);
-  const Icono = item.es_servicio ? Briefcase : Package;
 
   return (
     <article className="flex flex-col overflow-hidden rounded-2xl bg-white ring-1 ring-slate-200">
@@ -36,9 +36,7 @@ function Tarjeta({ item, p }: { item: ItemPublico; p: PortafolioPublico }) {
           // eslint-disable-next-line @next/next/no-img-element -- imagen pública de Supabase
           <img src={foto} alt={item.nombre} loading="lazy" className="size-full object-cover" />
         ) : (
-          <div className="flex size-full items-center justify-center">
-            <Icono className="size-12 text-slate-300" strokeWidth={1.3} aria-hidden />
-          </div>
+          <IlustracionProducto nombre={item.nombre} esServicio={item.es_servicio} color={p.color} />
         )}
         {item.etiqueta && (
           <span className="absolute top-2 left-2 rounded-full px-2.5 py-0.5 text-xs font-semibold text-white" style={{ backgroundColor: p.color }}>

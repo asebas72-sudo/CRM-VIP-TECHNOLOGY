@@ -25,22 +25,27 @@ function Formulario({
   textoBoton,
   alGuardar,
   alCancelar,
+  children,
 }: {
   inicial: DatosServicio;
   textoBoton: string;
-  alGuardar: (d: DatosServicio) => Promise<{ error?: string }>;
+  alGuardar: (d: DatosServicio) => Promise<{ error?: string; resumen?: string }>;
   alCancelar?: () => void;
+  children?: React.ReactNode;
 }) {
   const [d, setD] = useState(inicial);
   const [precio, setPrecio] = useState(inicial.precio ? String(inicial.precio) : "");
   const [error, setError] = useState<string>();
+  const [resumen, setResumen] = useState<string>();
   const [guardando, iniciar] = useTransition();
 
   function enviar(e: React.FormEvent) {
     e.preventDefault();
     setError(undefined);
+    setResumen(undefined);
     iniciar(async () => {
       const r = await alGuardar({ ...d, precio: Number(precio.replace(/\D/g, "")) });
+      setResumen(r.resumen);
       if (r.error) setError(r.error);
       else if (!alCancelar) {
         setD(VACIO);
@@ -85,12 +90,14 @@ function Formulario({
           className={`${campo} mt-1`}
         />
       </label>
+      {children && <div className="sm:col-span-3">{children}</div>}
       <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-3">
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={d.publicar} onChange={(e) => setD({ ...d, publicar: e.target.checked })} className="size-4" />
           Mostrar en el portafolio
         </label>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {resumen && <span className="text-sm text-green-700">{resumen}</span>}
           {error && <span className="text-sm text-red-700">{error}</span>}
           {alCancelar && (
             <button type="button" onClick={alCancelar} className={botonSecundario}>
@@ -163,12 +170,57 @@ function Fila({ s }: { s: Servicio }) {
   );
 }
 
-export function ListaServicios({ servicios }: { servicios: Servicio[] }) {
+/** Cada creación pide de nuevo las empresas, para no cargar un servicio donde no corresponde. */
+function NuevoServicio({ empresas }: { empresas: { id: string; nombre: string }[] }) {
+  const inicial = empresas.length === 1 ? [empresas[0].id] : [];
+  const [elegidas, setElegidas] = useState<string[]>(inicial);
+  const todas = elegidas.length === empresas.length;
+
+  async function guardar(d: DatosServicio) {
+    const r = await crearServicio(d, elegidas);
+    if (!r.error) setElegidas(inicial);
+    return r;
+  }
+
+  return (
+    <Formulario inicial={VACIO} textoBoton="Crear servicio" alGuardar={guardar}>
+      <fieldset>
+        <legend className={etiqueta}>Crear en *</legend>
+        <div className="mt-1 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-700">
+          {empresas.length > 1 && (
+            <label className="flex items-center gap-2 font-medium">
+              <input
+                type="checkbox"
+                checked={todas}
+                onChange={(e) => setElegidas(e.target.checked ? empresas.map((x) => x.id) : [])}
+                className="size-4"
+              />
+              Todas las empresas
+            </label>
+          )}
+          {empresas.map((x) => (
+            <label key={x.id} className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={elegidas.includes(x.id)}
+                onChange={(e) => setElegidas((a) => (e.target.checked ? [...a, x.id] : a.filter((id) => id !== x.id)))}
+                className="size-4"
+              />
+              {x.nombre}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+    </Formulario>
+  );
+}
+
+export function ListaServicios({ servicios, empresas }: { servicios: Servicio[]; empresas: { id: string; nombre: string }[] }) {
   return (
     <>
       <div className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
         <h2 className="mb-3 font-semibold text-slate-900">Nuevo servicio</h2>
-        <Formulario inicial={VACIO} textoBoton="Crear servicio" alGuardar={crearServicio} />
+        <NuevoServicio empresas={empresas} />
       </div>
       {servicios.length === 0 ? (
         <p className="rounded-2xl bg-white p-10 text-center text-slate-500 ring-1 ring-slate-200">Todavía no hay servicios creados.</p>

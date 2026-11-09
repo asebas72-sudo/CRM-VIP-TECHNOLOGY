@@ -1,7 +1,7 @@
 "use client";
 
-import { ImagePlus } from "lucide-react";
 import { useMemo, useState, useTransition } from "react";
+import { IlustracionProducto } from "@/components/ilustracion-producto";
 import { pesos } from "@/lib/formato";
 import { comprimirImagen } from "@/lib/imagenes";
 import { urlImagenPortafolio } from "@/lib/portafolio";
@@ -62,7 +62,7 @@ function Fila({ item }: { item: ItemPortafolio }) {
           // eslint-disable-next-line @next/next/no-img-element -- imagen pública de Supabase
           <img src={url} alt={item.nombre} className="size-full object-cover" />
         ) : (
-          <ImagePlus className="size-6 text-slate-400" aria-hidden />
+          <IlustracionProducto nombre={item.nombre} esServicio={item.es_servicio} compacta />
         )}
         <span className="sr-only">Cambiar foto de {item.nombre}</span>
         <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => elegirFoto(e.target.files?.[0])} />
