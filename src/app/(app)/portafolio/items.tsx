@@ -22,12 +22,6 @@ export type ItemPortafolio = {
   etiqueta_portafolio: "oferta" | "nuevo" | null;
 };
 
-/** Instrucción para crear en Gemini la imagen del producto; los textos los pone el CRM. */
-function instruccionGemini(nombre: string, descripcion: string): string {
-  const detalles = descripcion.trim() ? ` Detalles del producto: ${descripcion.trim()}.` : "";
-  return `Fotografía publicitaria profesional de un ${nombre}, centrado, sobre fondo limpio de tonos claros con iluminación de estudio y sombra suave.${detalles} Formato cuadrado. Sin texto, sin letras, sin logos, sin marcas de agua y sin personas.`;
-}
-
 const normalizar = (t: string) => t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 
 function Fila({ item }: { item: ItemPortafolio }) {
@@ -42,18 +36,7 @@ function Fila({ item }: { item: ItemPortafolio }) {
   const [descripcion, setDescripcion] = useState(item.descripcion_comercial ?? "");
   const [foto, setFoto] = useState(item.foto_path);
   const [error, setError] = useState<string>();
-  const [copiado, setCopiado] = useState(false);
   const [guardando, iniciar] = useTransition();
-
-  async function copiarInstruccion() {
-    try {
-      await navigator.clipboard.writeText(instruccionGemini(item.nombre, descripcion));
-      setCopiado(true);
-      setTimeout(() => setCopiado(false), 2000);
-    } catch {
-      setError("No se pudo copiar. Revise el permiso del navegador para el portapapeles.");
-    }
-  }
 
   type Cambios = { publicar?: boolean; etiqueta?: string; archivo?: File; quitarFoto?: boolean };
 
@@ -117,11 +100,6 @@ function Fila({ item }: { item: ItemPortafolio }) {
           className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm"
           aria-label={`Descripción de ${item.nombre}`}
         />
-        {!item.es_servicio && (
-          <button type="button" onClick={copiarInstruccion} className="text-sm font-medium text-blue-700 hover:underline">
-            {copiado ? "Instrucción copiada" : "Copiar instrucción para Gemini"}
-          </button>
-        )}
         {error && <p className="text-sm text-red-700">{error}</p>}
       </div>
 
