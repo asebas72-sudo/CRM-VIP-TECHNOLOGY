@@ -21,6 +21,8 @@ export type MarcaPieza = {
   logoUrl: string | null;
   whatsapp: string | null;
   enlace: string;
+  instagram?: string | null;
+  facebook?: string | null;
 };
 
 export type Formato = "cuadrada" | "vertical";
@@ -31,16 +33,16 @@ const MEDIDAS = {
   vertical: { alto: 1920, encabezado: 300, pie: 320, imagen: 800, nombre: 66, lineas: 3, precio: 116, logo: 130, y: 110 },
 };
 
-const FUENTE = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
+export const FUENTE = "system-ui, -apple-system, 'Segoe UI', Arial, sans-serif";
 const ANCHO = 1080;
 const MARGEN = 60;
 
-function textoSobre(color: string): string {
+export function textoSobre(color: string): string {
   const [r, g, b] = [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16));
   return 0.299 * r + 0.587 * g + 0.114 * b > 170 ? "#0f172a" : "#ffffff";
 }
 
-function cargarImagen(url: string): Promise<HTMLImageElement | null> {
+export function cargarImagen(url: string): Promise<HTMLImageElement | null> {
   return new Promise((listo) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -62,13 +64,13 @@ async function imagenIlustracion(item: ItemPieza, color: string): Promise<HTMLIm
   return dibujos.filter((d): d is HTMLImageElement => d !== null);
 }
 
-function encajar(ctx: CanvasRenderingContext2D, img: CanvasImageSource, ancho: number, alto: number, x: number, y: number, w: number, h: number) {
+export function encajar(ctx: CanvasRenderingContext2D, img: CanvasImageSource, ancho: number, alto: number, x: number, y: number, w: number, h: number) {
   const escala = Math.min(w / ancho, h / alto);
   const [dw, dh] = [ancho * escala, alto * escala];
   ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
 }
 
-function lineasDeTexto(ctx: CanvasRenderingContext2D, texto: string, maximo: number, lineas: number): string[] {
+export function lineasDeTexto(ctx: CanvasRenderingContext2D, texto: string, maximo: number, lineas: number): string[] {
   const palabras = texto.trim().split(/\s+/);
   const salida: string[] = [];
   let actual = "";
@@ -91,7 +93,7 @@ function lineasDeTexto(ctx: CanvasRenderingContext2D, texto: string, maximo: num
   return salida;
 }
 
-function textoAjustado(ctx: CanvasRenderingContext2D, texto: string, maximo: number, peso: string, tamano: number): void {
+export function textoAjustado(ctx: CanvasRenderingContext2D, texto: string, maximo: number, peso: string, tamano: number): void {
   let t = tamano;
   do {
     ctx.font = `${peso} ${t}px ${FUENTE}`;
@@ -99,7 +101,7 @@ function textoAjustado(ctx: CanvasRenderingContext2D, texto: string, maximo: num
   } while (ctx.measureText(texto).width > maximo && t > 20);
 }
 
-function rectanguloRedondeado(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function rectanguloRedondeado(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
   ctx.fill();

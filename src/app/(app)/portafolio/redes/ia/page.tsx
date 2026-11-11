@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { exigirRol } from "@/lib/empresa";
-import { mejorarFoto } from "../acciones";
+import { mejorarFoto, sugerirTextosAnuncio } from "../acciones";
 import { cargarDatosRedes } from "../datos";
 import { MejorarConIA } from "./mejorar";
 
@@ -21,7 +21,7 @@ export default async function PaginaMejorarConIA() {
         </p>
       </div>
       {datos ? (
-        <MejorarConIA {...datos} generar={mejorarFoto} />
+        <MejorarConIA {...datos} generar={mejorarFoto} sugerir={sugerirTextosAnuncio} />
       ) : (
         <p className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900 ring-1 ring-amber-200">
           Primero llene y guarde los datos en Portafolio.

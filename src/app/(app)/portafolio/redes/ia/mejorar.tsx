@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { botonPrimario, botonSecundario } from "@/components/dialogo";
 import { comprimirImagen } from "@/lib/imagenes";
-import { aBlob, descargarBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza, type MostrarPieza } from "../piezas";
+import { dibujarAnuncio, plantillaSugerida, type MostrarAnuncio, type Plantilla } from "../anuncio";
+import { aBlob, descargarBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza } from "../piezas";
 
 const OPCIONES = [
   { valor: "luz", texto: "Mejorar luz, color y nitidez" },
@@ -19,44 +20,92 @@ const ESTILOS = [
   { nombre: "Publicitario", opciones: ["luz", "fondo", "graficos"] },
 ];
 
+const PLANTILLAS: { valor: Plantilla | "ficha"; nombre: string }[] = [
+  { valor: "banda", nombre: "Banda inferior" },
+  { valor: "arriba", nombre: "Título arriba" },
+  { valor: "lateral", nombre: "Lateral" },
+  { valor: "oferta", nombre: "Oferta" },
+  { valor: "ficha", nombre: "Ficha sencilla" },
+];
+
 type Generar = (form: FormData) => Promise<{ imagen?: string; error?: string }>;
+type Sugerir = (servicio: string, descripcion: string) => Promise<{ opciones?: { titulo: string; subtitulo: string }[]; error?: string }>;
+
+const chip = (activo: boolean) =>
+  `rounded-full px-3 py-1 text-xs font-medium ring-1 ${activo ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-slate-700 ring-slate-300"}`;
 
 export function MejorarConIA({
   items,
   marca,
   preciosInicial,
   generar,
+  sugerir,
 }: {
   items: ItemPieza[];
   marca: MarcaPieza;
   preciosInicial: boolean;
   generar: Generar;
+  sugerir: Sugerir;
 }) {
   // Los servicios primero: son lo que más se publica
   const ordenados = useMemo(() => [...items].sort((a, b) => Number(b.esServicio) - Number(a.esServicio) || a.nombre.localeCompare(b.nombre)), [items]);
   const [itemId, setItemId] = useState(ordenados[0]?.id ?? "");
   const [foto, setFoto] = useState<{ archivo: File; url: string; ancho: number; alto: number } | null>(null);
   const [opciones, setOpciones] = useState(ESTILOS[0].opciones);
-  const [mostrar, setMostrar] = useState<MostrarPieza>({ logo: true, empresa: true, whatsapp: true });
   const [texto, setTexto] = useState("");
   const [resultado, setResultado] = useState<string | null>(null);
+  const [plantilla, setPlantilla] = useState<Plantilla | "ficha">("banda");
+  const [titulo, setTitulo] = useState("");
+  const [subtitulo, setSubtitulo] = useState("");
+  const [sugerencias, setSugerencias] = useState<{ titulo: string; subtitulo: string }[]>([]);
+  const [mostrar, setMostrar] = useState<MostrarAnuncio>({ logo: true, empresa: true, whatsapp: true, redes: true });
   const [conPrecio, setConPrecio] = useState(preciosInicial);
   const [error, setError] = useState<string>();
   const [copiado, setCopiado] = useState(false);
   const [generando, iniciar] = useTransition();
+  const [sugiriendo, iniciarSugerir] = useTransition();
   const cuadrada = useRef<HTMLCanvasElement>(null);
   const vertical = useRef<HTMLCanvasElement>(null);
 
   const elegido = items.find((i) => i.id === itemId);
-  const pieza = useMemo(() => (elegido && resultado ? { ...elegido, fotoUrl: resultado } : null), [elegido, resultado]);
+  const textos = useMemo(
+    () => ({
+      titulo: titulo.trim() || elegido?.nombre || "",
+      subtitulo: subtitulo.trim(),
+      precio: conPrecio && elegido ? elegido.precio : null,
+    }),
+    [titulo, subtitulo, conPrecio, elegido],
+  );
+  const pieza = useMemo(
+    () => (elegido && resultado ? { ...elegido, fotoUrl: resultado, nombre: textos.titulo, descripcion: textos.subtitulo || elegido.descripcion } : null),
+    [elegido, resultado, textos],
+  );
 
   useEffect(() => {
-    if (!pieza || !cuadrada.current || !vertical.current) return;
-    Promise.all([
-      dibujarPieza(cuadrada.current, pieza, marca, "cuadrada", conPrecio, mostrar),
-      dibujarPieza(vertical.current, pieza, marca, "vertical", conPrecio, mostrar),
-    ]).catch(() => setError("No se pudo armar la pieza."));
-  }, [pieza, marca, conPrecio, mostrar]);
+    if (!pieza || !resultado || !cuadrada.current || !vertical.current) return;
+    // Se dibuja aparte y solo se copia la última versión: evita que dos dibujos se mezclen
+    let vigente = true;
+    const dibujar = async (destino: HTMLCanvasElement, formato: Formato) => {
+      const lienzo = document.createElement("canvas");
+      if (plantilla === "ficha") await dibujarPieza(lienzo, pieza, marca, formato, conPrecio, mostrar);
+      else await dibujarAnuncio(lienzo, resultado, textos, marca, plantilla, formato, mostrar);
+      if (!vigente) return;
+      destino.width = lienzo.width;
+      destino.height = lienzo.height;
+      destino.getContext("2d")!.drawImage(lienzo, 0, 0);
+    };
+    Promise.all([dibujar(cuadrada.current, "cuadrada"), dibujar(vertical.current, "vertical")]).catch(() => setError("No se pudo armar la pieza."));
+    return () => {
+      vigente = false;
+    };
+  }, [pieza, resultado, textos, marca, plantilla, mostrar, conPrecio]);
+
+  function cambiarItem(id: string) {
+    setItemId(id);
+    setTitulo("");
+    setSubtitulo("");
+    setSugerencias([]);
+  }
 
   async function elegirFoto(f: File | undefined) {
     if (!f) return;
@@ -66,6 +115,7 @@ export function MejorarConIA({
       const archivo = await comprimirImagen(f, 1024);
       const imagen = await createImageBitmap(archivo);
       setFoto({ archivo, url: URL.createObjectURL(archivo), ancho: imagen.width, alto: imagen.height });
+      setPlantilla(plantillaSugerida(imagen.width, imagen.height));
     } catch {
       setError("No se pudo abrir la foto. Use JPG, PNG o WEBP.");
     }
@@ -85,6 +135,16 @@ export function MejorarConIA({
       const r = await generar(form);
       if (r.imagen) setResultado(r.imagen);
       else setError(r.error ?? "No se pudo mejorar la foto.");
+    });
+  }
+
+  function pedirTextos() {
+    if (!elegido) return;
+    setError(undefined);
+    iniciarSugerir(async () => {
+      const r = await sugerir(elegido.nombre, elegido.descripcion ?? "");
+      if (r.opciones) setSugerencias(r.opciones);
+      else setError(r.error ?? "No se pudieron sugerir textos.");
     });
   }
 
@@ -112,12 +172,19 @@ export function MejorarConIA({
     );
   }
 
+  const casilla = (clave: keyof MostrarAnuncio, nombre: string) => (
+    <label key={clave} className="flex items-center gap-2">
+      <input type="checkbox" checked={mostrar[clave]} onChange={(e) => setMostrar((m) => ({ ...m, [clave]: e.target.checked }))} className="size-4" />
+      {nombre}
+    </label>
+  );
+
   return (
     <div className="grid gap-6 lg:grid-cols-[340px_1fr]">
       <div className="space-y-4 self-start rounded-2xl bg-white p-5 ring-1 ring-slate-200">
         <label className="block text-sm font-medium text-slate-700">
           Servicio o producto
-          <select value={itemId} onChange={(e) => setItemId(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal">
+          <select value={itemId} onChange={(e) => cambiarItem(e.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal">
             {ordenados.map((i) => (
               <option key={i.id} value={i.id}>
                 {i.esServicio ? "Servicio: " : ""}
@@ -136,17 +203,10 @@ export function MejorarConIA({
           />
         </label>
         <fieldset className="space-y-2 text-sm text-slate-700">
-          <legend className="font-medium">Estilo predefinido</legend>
+          <legend className="font-medium">Estilo de la foto</legend>
           <div className="flex flex-wrap gap-2">
             {ESTILOS.map((e) => (
-              <button
-                key={e.nombre}
-                type="button"
-                onClick={() => setOpciones(e.opciones)}
-                className={`rounded-full px-3 py-1 text-xs font-medium ring-1 ${
-                  [...e.opciones].sort().join() === [...opciones].sort().join() ? "bg-blue-600 text-white ring-blue-600" : "bg-white text-slate-700 ring-slate-300"
-                }`}
-              >
+              <button key={e.nombre} type="button" onClick={() => setOpciones(e.opciones)} className={chip([...e.opciones].sort().join() === [...opciones].sort().join())}>
                 {e.nombre}
               </button>
             ))}
@@ -167,10 +227,10 @@ export function MejorarConIA({
           ))}
         </fieldset>
         <label className="block text-sm font-medium text-slate-700">
-          Indicación adicional (opcional)
-          <span className="block text-xs font-normal text-slate-500">El logo, el nombre y el WhatsApp los pone el sistema; no hace falta pedirlos aquí.</span>
+          Indicación adicional para la foto (opcional)
+          <span className="block text-xs font-normal text-slate-500">Los textos y los datos de la empresa se ponen abajo, no aquí.</span>
           <textarea
-            rows={3}
+            rows={2}
             maxLength={300}
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
@@ -181,9 +241,7 @@ export function MejorarConIA({
           {generando ? "Generando..." : resultado ? "Generar otra versión" : "Mejorar foto"}
         </button>
         {error && <p className="rounded-lg bg-red-50 p-3 text-sm text-red-800 ring-1 ring-red-200">{error}</p>}
-        <p className="text-xs text-slate-500">
-          Revise que la IA no cambie ni agregue equipos. No suba fotos con rostros, placas o datos de clientes.
-        </p>
+        <p className="text-xs text-slate-500">Revise que la IA no cambie ni agregue equipos. No suba fotos con rostros, placas o datos de clientes.</p>
       </div>
 
       <div className="space-y-4">
@@ -216,36 +274,81 @@ export function MejorarConIA({
         )}
 
         {pieza && (
-          <div className="space-y-4 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+          <div className="space-y-5 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm font-medium text-slate-700">
+                Título del anuncio
+                <input
+                  value={titulo}
+                  onChange={(e) => setTitulo(e.target.value)}
+                  placeholder={elegido?.nombre}
+                  maxLength={80}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+                />
+              </label>
+              <label className="block text-sm font-medium text-slate-700">
+                Subtítulo
+                <input
+                  value={subtitulo}
+                  onChange={(e) => setSubtitulo(e.target.value)}
+                  maxLength={120}
+                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+                />
+              </label>
+            </div>
+            <div className="space-y-2">
+              <button type="button" onClick={pedirTextos} disabled={sugiriendo} className={botonSecundario}>
+                {sugiriendo ? "Pensando textos (puede tardar unos segundos)..." : "Sugerir textos con IA"}
+              </button>
+              {sugerencias.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {sugerencias.map((s) => (
+                    <button
+                      key={s.titulo}
+                      type="button"
+                      onClick={() => {
+                        setTitulo(s.titulo);
+                        setSubtitulo(s.subtitulo);
+                      }}
+                      className="rounded-lg bg-slate-50 px-3 py-2 text-left text-sm ring-1 ring-slate-200 hover:bg-blue-50 hover:ring-blue-300"
+                    >
+                      <span className="block font-semibold text-slate-900">{s.titulo}</span>
+                      <span className="text-slate-600">{s.subtitulo}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <fieldset className="space-y-2 text-sm text-slate-700">
+              <legend className="font-medium">Plantilla</legend>
+              <div className="flex flex-wrap gap-2">
+                {PLANTILLAS.map((p) => (
+                  <button key={p.valor} type="button" onClick={() => setPlantilla(p.valor)} className={chip(plantilla === p.valor)}>
+                    {p.nombre}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
             <fieldset className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm text-slate-700">
               <legend className="mb-2 font-medium">Incluir en la imagen</legend>
-              {(
-                [
-                  ["logo", "Logo"],
-                  ["empresa", "Nombre de la empresa"],
-                  ["whatsapp", "WhatsApp"],
-                ] as const
-              ).map(([clave, nombre]) => (
-                <label key={clave} className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={mostrar[clave]}
-                    onChange={(e) => setMostrar((m) => ({ ...m, [clave]: e.target.checked }))}
-                    className="size-4"
-                  />
-                  {nombre}
-                </label>
-              ))}
+              {casilla("logo", "Logo")}
+              {casilla("empresa", "Nombre (si no hay logo)")}
+              {casilla("whatsapp", "WhatsApp")}
+              {casilla("redes", "Instagram y Facebook")}
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={conPrecio} onChange={(e) => setConPrecio(e.target.checked)} className="size-4" />
                 Precio
               </label>
             </fieldset>
-            {mostrar.logo && !marca.logoUrl && (
-              <p className="text-sm text-amber-800">Esta empresa aún no tiene logo. Súbalo en Portafolio para que aparezca.</p>
+            {mostrar.logo && !marca.logoUrl && <p className="text-sm text-amber-800">Esta empresa aún no tiene logo. Súbalo en Portafolio para que aparezca.</p>}
+            {mostrar.redes && !marca.instagram && !marca.facebook && (
+              <p className="text-sm text-amber-800">Agregue los enlaces de Instagram y Facebook en Portafolio para que aparezcan.</p>
             )}
+
             <div className="flex flex-wrap items-start gap-5">
-              <figure className="w-72 max-w-full space-y-2">
+              <figure className="w-80 max-w-full space-y-2">
                 <canvas ref={cuadrada} className="w-full rounded-lg ring-1 ring-slate-200" aria-label="Imagen cuadrada" />
                 <button type="button" onClick={() => bajar("cuadrada")} className={`${botonSecundario} w-full`}>
                   Descargar cuadrada

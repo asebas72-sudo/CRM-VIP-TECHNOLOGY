@@ -10,7 +10,7 @@ export type DatosRedes = { items: ItemPieza[]; marca: MarcaPieza; preciosInicial
 export async function cargarDatosRedes(activa: EmpresaDelUsuario): Promise<DatosRedes | null> {
   const supabase = await crearClienteServidor();
   const [configRes, itemsRes] = await Promise.all([
-    supabase.from("portafolio_config").select("slug, color, logo_path, whatsapp, mostrar_precios, agotados").eq("empresa_id", activa.id).maybeSingle(),
+    supabase.from("portafolio_config").select("slug, color, logo_path, whatsapp, instagram, facebook, mostrar_precios, agotados").eq("empresa_id", activa.id).maybeSingle(),
     supabase
       .from("productos")
       .select("id, nombre, descripcion_comercial, precio_venta, stock, es_servicio, foto_path, etiqueta_portafolio")
@@ -51,6 +51,8 @@ export async function cargarDatosRedes(activa: EmpresaDelUsuario): Promise<Datos
       color: config.color,
       logoUrl: urlImagenPortafolio(config.logo_path),
       whatsapp: config.whatsapp,
+      instagram: config.instagram,
+      facebook: config.facebook,
       enlace: `${protocolo}://${host}/catalogo/${config.slug}`,
     },
   };

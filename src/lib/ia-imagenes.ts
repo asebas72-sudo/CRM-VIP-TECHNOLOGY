@@ -24,6 +24,47 @@ function medida(valor: FormDataEntryValue | null): number {
   return Number.isFinite(n) ? Math.min(Math.max(n, 256), 1024) : 1024;
 }
 
+export type ResultadoTextos = { opciones?: { titulo: string; subtitulo: string }[]; error?: string };
+
+const MODELO_TEXTO = "@cf/meta/llama-3.3-70b-instruct-fp8-fast";
+
+/** Tres opciones de título y subtítulo para un anuncio (modelo de texto del mismo cupo gratis). */
+export async function sugerirTextos(empresa: string, servicio: string, descripcion: string): Promise<ResultadoTextos> {
+  const cuenta = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const token = process.env.CLOUDFLARE_API_TOKEN;
+  if (!cuenta || !token) return { error: "Falta configurar CLOUDFLARE_ACCOUNT_ID y CLOUDFLARE_API_TOKEN en el servidor." };
+
+  const tema = servicio.trim().slice(0, 120);
+  const detalle = descripcion.trim().slice(0, 300);
+  const prompt =
+    `Eres redactor publicitario de ${empresa}, empresa de tecnología en Colombia. Escribe 3 opciones de texto para un anuncio en redes sociales sobre: ${tema}.` +
+    (detalle ? ` Detalles: ${detalle}.` : "") +
+    " Cada opción tiene un título corto y llamativo (máximo 7 palabras) y un subtítulo (máximo 10 palabras)." +
+    " En español de Colombia, sin emojis, sin hashtags, sin precios ni teléfonos." +
+    ' Responde solo con JSON: [{"titulo":"...","subtitulo":"..."}]';
+
+  try {
+    const r = await fetch(`https://api.cloudflare.com/client/v4/accounts/${cuenta}/ai/run/${MODELO_TEXTO}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: [{ role: "user", content: prompt }], max_tokens: 400, temperature: 0.8 }),
+      signal: AbortSignal.timeout(60_000),
+    });
+    const datos = (await r.json().catch(() => null)) as { result?: { response?: unknown }; errors?: { message?: string }[] } | null;
+    if (r.status === 429) return { error: "Se agotó el cupo gratis de hoy. Intente mañana." };
+    const respuesta = datos?.result?.response;
+    if (!respuesta) return { error: datos?.errors?.[0]?.message ?? `El servicio de IA devolvió un error (${r.status}).` };
+
+    const texto = typeof respuesta === "string" ? respuesta : JSON.stringify(respuesta);
+    const opciones = [...texto.matchAll(/"titulo"\s*:\s*"([^"]+)"\s*,\s*"subtitulo"\s*:\s*"([^"]+)"/g)]
+      .slice(0, 3)
+      .map((m) => ({ titulo: m[1].trim().slice(0, 80), subtitulo: m[2].trim().slice(0, 120) }));
+    return opciones.length ? { opciones } : { error: "La IA no devolvió textos. Intente de nuevo." };
+  } catch {
+    return { error: "El servicio de IA no respondió. Intente de nuevo." };
+  }
+}
+
 export async function mejorarImagen(form: FormData): Promise<ResultadoIA> {
   const cuenta = process.env.CLOUDFLARE_ACCOUNT_ID;
   const token = process.env.CLOUDFLARE_API_TOKEN;
