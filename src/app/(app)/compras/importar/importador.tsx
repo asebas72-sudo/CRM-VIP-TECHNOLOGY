@@ -15,6 +15,9 @@ import {
   type VistaPrevia,
 } from "./acciones";
 
+/** Precio en pesos enteros a partir de lo escrito ("45.000", "$ 45000"). */
+const precioDe = (texto: string | number | undefined) => Number(String(texto ?? "").replace(/\D/g, "")) || 0;
+
 const campo =
   "w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm outline-none focus:border-blue-600 focus:ring-2 focus:ring-blue-600/20";
 
@@ -193,7 +196,7 @@ function VistaPreviaCompra({
     if (!form) return;
     const datos = new FormData(form);
     datos.set("empresa_id", empresa.id);
-    datos.set("ediciones", JSON.stringify(ediciones));
+    datos.set("ediciones", JSON.stringify(ediciones.map((e) => ({ ...e, precioVenta: precioDe(e.precioVenta) || undefined }))));
     iniciar(async () => {
       const r = await importarCompra(datos);
       setConfirmando(false);
@@ -242,13 +245,17 @@ function VistaPreviaCompra({
               <th className="px-3 py-2 font-medium">En la factura</th>
               <th className="px-3 py-2 text-right font-medium">Cant.</th>
               <th className="px-3 py-2 text-right font-medium">Costo u. (sin IVA)</th>
-              <th className="w-[38%] px-3 py-2 font-medium">Producto en inventario</th>
+              <th className="w-36 px-3 py-2 text-right font-medium">Precio venta (IVA incl.)</th>
+              <th className="w-[34%] px-3 py-2 font-medium">Producto en inventario</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 align-top">
             {lineas.map((l, i) => {
               const ed = ediciones[i];
               const existente = porCodigo.get(ed.codigo.trim());
+              const venta = precioDe(ed.precioVenta);
+              // Se avisa si el precio no cubre el costo con IVA, pero se permite
+              const bajoCosto = venta > 0 && venta < l.costoUnitario * (1 + l.ivaPorcentaje / 100);
               return (
                 <tr key={i}>
                   <td className="px-3 py-2">
@@ -260,6 +267,17 @@ function VistaPreviaCompra({
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">{cantidad(l.cantidad)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{pesos(l.costoUnitario)}</td>
+                  <td className="px-3 py-2">
+                    <input
+                      value={ed.precioVenta ?? ""}
+                      onChange={(e) => editar(i, { precioVenta: e.target.value })}
+                      inputMode="numeric"
+                      placeholder={existente ? "Sin cambio" : "Automático"}
+                      className={`${campo} text-right ${bajoCosto ? "border-red-400" : ""}`}
+                      aria-label="Precio de venta"
+                    />
+                    {bajoCosto && <p className="mt-1 text-xs font-medium text-red-700">Menor que el costo</p>}
+                  </td>
                   <td className="space-y-1.5 px-3 py-2">
                     <div className="flex items-center gap-2">
                       <input
@@ -319,8 +337,8 @@ function VistaPreviaCompra({
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-slate-200">
         <p className="text-sm text-slate-600">
-          Se crearán <strong>{nuevos.size}</strong> producto(s) nuevo(s) con precio sugerido (costo + IVA + margen).
-          Escriba el código de un producto existente para sumarle el stock.
+          Se crearán <strong>{nuevos.size}</strong> producto(s) nuevo(s). Si no escribe el precio de venta, se calcula solo
+          (costo + IVA + margen). Escriba el código de un producto existente para sumarle el stock.
         </p>
         <button
           onClick={() => setConfirmando(true)}
@@ -389,6 +407,7 @@ function VistaPreviaCompra({
           <p>
             La factura <strong>{resultado.numero}</strong> quedó registrada en <strong>{resultado.empresa}</strong> y
             sus {cantidad(unidades)} unidades ya están en el inventario.
+            {resultado.aviso && <span className="mt-2 block text-amber-800">{resultado.aviso}</span>}
           </p>
         ) : (
           <p>{resultado?.error}</p>

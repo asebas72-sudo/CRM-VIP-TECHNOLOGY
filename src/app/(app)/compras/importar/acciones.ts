@@ -29,7 +29,8 @@ export type VistaPrevia = {
 
 export type EstadoAnalisis = { error?: string; vista?: VistaPrevia };
 
-export type EdicionLinea = { codigo: string; nombre: string; manejaSerial: boolean };
+/** precioVenta: con IVA; en la pantalla es lo que se escribe, al enviarse va como número o vacío. */
+export type EdicionLinea = { codigo: string; nombre: string; manejaSerial: boolean; precioVenta?: string | number };
 
 export type ResultadoImportacion =
   | { ok: true; compraId: string; empresaId: string; empresa: string; numero: string; aviso?: string }
@@ -210,6 +211,20 @@ export async function importarCompra(form: FormData): Promise<ResultadoImportaci
   });
   if (error) return { ok: false, error: error.message };
 
+  // Precio de venta escrito en la importación: reemplaza el automático o el que tenía el producto
+  const fallidos: string[] = [];
+  for (const [i, l] of lineas.entries()) {
+    const precio = Math.round(Number(ediciones[i].precioVenta));
+    if (!(precio > 0)) continue;
+    const { error: errorPrecio } = await supabase
+      .from("productos")
+      .update({ precio_venta: precio, actualizado_en: new Date().toISOString() })
+      .eq("empresa_id", empresa.id)
+      .eq("codigo", l.codigo);
+    if (errorPrecio) fallidos.push(l.nombre);
+  }
+  const aviso = fallidos.length ? `La compra se guardó, pero no se pudo poner el precio de venta a: ${fallidos.join(", ")}.` : undefined;
+
   // Respaldo del XML y del PDF (si se adjuntó). Si falla, la compra ya quedó registrada.
   const carpeta = `${empresa.id}/${compraId}`;
   const rutas: { xml_path?: string; pdf_path?: string } = {};
@@ -235,7 +250,7 @@ export async function importarCompra(form: FormData): Promise<ResultadoImportaci
     await supabase.from("facturas_correo").update({ compra_id: compraId, empresa_id: empresa.id }).eq("id", correoId);
   }
 
-  return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero: factura.numero };
+  return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero: factura.numero, aviso };
 }
 
 /** Abre una compra cambiando primero a la empresa donde quedó registrada. */
