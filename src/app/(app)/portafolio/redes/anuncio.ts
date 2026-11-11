@@ -57,7 +57,7 @@ type Dato = { icono: "whatsapp" | "instagram" | "facebook"; texto: string };
 
 function datosContacto(marca: MarcaPieza, mostrar: MostrarAnuncio): Dato[] {
   const datos: Dato[] = [];
-  if (mostrar.whatsapp && marca.whatsapp) datos.push({ icono: "whatsapp", texto: marca.whatsapp });
+  if (mostrar.whatsapp && marca.whatsapp) datos.push({ icono: "whatsapp", texto: `WhatsApp ${marca.whatsapp}` });
   if (mostrar.redes) {
     const ig = usuarioRed(marca.instagram, true);
     const fb = usuarioRed(marca.facebook, false);
@@ -65,6 +65,12 @@ function datosContacto(marca: MarcaPieza, mostrar: MostrarAnuncio): Dato[] {
     if (fb) datos.push({ icono: "facebook", texto: fb });
   }
   return datos;
+}
+
+/** Color de la marca (#rrggbb) con transparencia. */
+function colorAlfa(hex: string, alfa: number): string {
+  const n = /^#[0-9a-f]{6}$/i.test(hex) ? parseInt(hex.slice(1), 16) : 0x1d4ed8;
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alfa})`;
 }
 
 function cubrir(ctx: CanvasRenderingContext2D, img: HTMLImageElement, x: number, y: number, w: number, h: number) {
@@ -290,8 +296,8 @@ export async function dibujarAnuncio(
   if (plantilla === "contacto") {
     // La IA ya escribió los textos: la imagen va completa (sin recortar) y solo se agregan logo y contacto
     // En cuadrada la marca va en la franja de abajo: arriba suele estar el título que escribió la IA
-    const wMarca = vertical ? 0 : await anchoMarca(ctx, marca, mostrar, 64);
-    const franja = datos.length || wMarca ? (vertical ? 170 : 110) : 0;
+    const wMarca = vertical ? 0 : await anchoMarca(ctx, marca, mostrar, 46);
+    const franja = vertical ? (datos.length ? 170 : 0) : datos.length && wMarca ? 170 : datos.length || wMarca ? 120 : 0;
     if (foto) {
       ctx.filter = "blur(40px) brightness(0.45)";
       cubrir(ctx, foto, -80, -80, ANCHO + 160, alto + 160);
@@ -300,19 +306,45 @@ export async function dibujarAnuncio(
     const yFranja = vertical ? abajo - franja + 60 : alto - franja;
     const y0 = vertical ? arriba + 150 : 0;
     const conFranja = franja > 0;
-    if (foto) encajar(ctx, foto, foto.width, foto.height, 0, y0, ANCHO, (conFranja ? yFranja : vertical ? abajo : alto) - y0);
+    // En cuadrada la foto llega hasta abajo y la franja se funde encima con un degradado
+    if (foto && !vertical) encajar(ctx, foto, foto.width, foto.height, 0, 0, ANCHO, alto);
+    if (foto && vertical) {
+      // La foto baja hasta meterse bajo el degradado de la franja, y su borde de arriba se difumina
+      const fin = conFranja ? yFranja + 40 : abajo;
+      const h = Math.min((foto.height / foto.width) * ANCHO, fin - y0);
+      const w = (foto.width / foto.height) * h;
+      const y = fin - h;
+      ctx.drawImage(foto, (ANCHO - w) / 2, y, w, h);
+      const borde = ctx.createLinearGradient(0, y, 0, y + 120);
+      borde.addColorStop(0, "rgba(15,23,42,0.9)");
+      borde.addColorStop(1, "rgba(15,23,42,0)");
+      ctx.fillStyle = borde;
+      ctx.fillRect(0, y, ANCHO, 120);
+    }
     if (vertical) await dibujarMarca(ctx, marca, mostrar, MARGEN, arriba, 110, false);
     if (conFranja) {
-      ctx.fillStyle = color;
+      const inicio = yFranja - (vertical ? 140 : 110);
+      const g = ctx.createLinearGradient(0, inicio, 0, alto);
+      g.addColorStop(0, colorAlfa(color, 0));
+      g.addColorStop((yFranja - inicio) / (alto - inicio), colorAlfa(color, 0.8));
+      g.addColorStop(1, colorAlfa(color, 0.95));
+      ctx.fillStyle = g;
+      ctx.fillRect(0, inicio, ANCHO, alto - inicio);
+      // Oscurece un poco hacia abajo para que el texto blanco se lea en cualquier color
+      const sombra = ctx.createLinearGradient(0, yFranja, 0, alto);
+      sombra.addColorStop(0, "rgba(0,0,0,0)");
+      sombra.addColorStop(1, "rgba(0,0,0,0.35)");
+      ctx.fillStyle = sombra;
       ctx.fillRect(0, yFranja, ANCHO, alto - yFranja);
-      if (wMarca) await dibujarMarca(ctx, marca, mostrar, MARGEN, yFranja + (franja - 84) / 2, 64, false);
-      const x0 = wMarca ? MARGEN + wMarca + 30 : MARGEN;
-      await contactoHorizontal(ctx, datos, yFranja + (vertical ? franja - 60 : franja) / 2, vertical ? 42 : 34, textoSobre(color), color, x0, ANCHO - MARGEN - x0);
+
+      const yContacto = vertical ? yFranja + (franja - 60) / 2 : wMarca ? yFranja + 48 : yFranja + franja / 2;
+      await contactoHorizontal(ctx, datos, yContacto, vertical ? 42 : 36, "#ffffff", color);
+      if (wMarca) await dibujarMarca(ctx, marca, mostrar, (ANCHO - wMarca) / 2, datos.length ? yFranja + 82 : yFranja + (franja - 66) / 2, 46, false);
     }
     // La IA solo escribe el título; el subtítulo lo pone el CRM sobre la parte baja de la imagen
     if (textos.subtitulo.trim()) {
       const tam = vertical ? 44 : 34;
-      const base = (conFranja ? yFranja : vertical ? abajo : alto) - 30;
+      const base = (conFranja ? yFranja - (vertical ? 150 : 120) : vertical ? abajo : alto) - 30;
       ctx.font = `600 ${tam}px ${FUENTE}`;
       const lineas = lineasDeTexto(ctx, textos.subtitulo, ANCHO - MARGEN * 2 - (textos.precio !== null ? 260 : 0), 2);
       degradado(ctx, base - lineas.length * tam * 1.3 - 60, base + 30, 0, 0.75, alto);
