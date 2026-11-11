@@ -7,6 +7,7 @@ import { dibujarAnuncio, plantillaSugerida, type MostrarAnuncio, type Plantilla 
 import { aBlob, descargarBlob, dibujarPieza, nombreArchivo, textoPublicacion, type Formato, type ItemPieza, type MarcaPieza } from "../piezas";
 
 const OPCIONES = [
+  { valor: "creativo", texto: "Rediseñar como anuncio (cambia mucho la foto)" },
   { valor: "luz", texto: "Mejorar luz, color y nitidez" },
   { valor: "fondo", texto: "Limpiar el fondo" },
   { valor: "oficina", texto: "Ambiente de oficina moderna" },
@@ -14,6 +15,7 @@ const OPCIONES = [
 ];
 
 const ESTILOS = [
+  { nombre: "Anuncio creativo (la IA rediseña)", opciones: ["creativo", "luz"] },
   { nombre: "Profesional", opciones: ["luz", "fondo"] },
   { nombre: "Natural (solo mejorar la foto)", opciones: ["luz"] },
   { nombre: "Oficina moderna", opciones: ["luz", "oficina"] },
@@ -21,6 +23,7 @@ const ESTILOS = [
 ];
 
 const PLANTILLAS: { valor: Plantilla | "ficha"; nombre: string }[] = [
+  { valor: "contacto", nombre: "Textos de la IA + contacto" },
   { valor: "banda", nombre: "Banda inferior" },
   { valor: "arriba", nombre: "Título arriba" },
   { valor: "lateral", nombre: "Lateral" },
@@ -53,6 +56,7 @@ export function MejorarConIA({
   const [foto, setFoto] = useState<{ archivo: File; url: string; ancho: number; alto: number } | null>(null);
   const [opciones, setOpciones] = useState(ESTILOS[0].opciones);
   const [texto, setTexto] = useState("");
+  const [textoIA, setTextoIA] = useState(false);
   const [resultado, setResultado] = useState<string | null>(null);
   const [plantilla, setPlantilla] = useState<Plantilla | "ficha">("banda");
   const [titulo, setTitulo] = useState("");
@@ -129,12 +133,21 @@ export function MejorarConIA({
     form.set("alto", String(foto.alto));
     form.set("color", marca.color);
     form.set("texto", texto);
+    form.set("servicio", elegido?.nombre ?? "");
+    const escribeIA = textoIA && opciones.includes("creativo");
+    if (escribeIA) {
+      form.set("texto_ia", "1");
+      form.set("titulo", textos.titulo);
+    }
     opciones.forEach((o) => form.append("opciones", o));
     setError(undefined);
     iniciar(async () => {
       const r = await generar(form);
-      if (r.imagen) setResultado(r.imagen);
-      else setError(r.error ?? "No se pudo mejorar la foto.");
+      if (r.imagen) {
+        setResultado(r.imagen);
+        // Si la IA ya escribió los textos, el CRM solo agrega logo y contacto
+        setPlantilla(escribeIA ? "contacto" : (p) => (p === "contacto" ? "banda" : p));
+      } else setError(r.error ?? "No se pudo mejorar la foto.");
     });
   }
 
@@ -237,6 +250,63 @@ export function MejorarConIA({
             className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-normal"
           />
         </label>
+        <div className="space-y-3 border-t border-slate-200 pt-4">
+          <label className="block text-sm font-medium text-slate-700">
+            Título del anuncio
+            <input
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder={elegido?.nombre}
+              maxLength={60}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+            />
+          </label>
+          <label className="block text-sm font-medium text-slate-700">
+            Subtítulo
+            <input
+              value={subtitulo}
+              onChange={(e) => setSubtitulo(e.target.value)}
+              maxLength={80}
+              className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
+            />
+          </label>
+          <button type="button" onClick={pedirTextos} disabled={sugiriendo} className={`${botonSecundario} w-full`}>
+            {sugiriendo ? "Pensando textos..." : "Sugerir textos con IA"}
+          </button>
+          {sugerencias.length > 0 && (
+            <div className="space-y-2">
+              {sugerencias.map((s) => (
+                <button
+                  key={s.titulo}
+                  type="button"
+                  onClick={() => {
+                    setTitulo(s.titulo);
+                    setSubtitulo(s.subtitulo);
+                  }}
+                  className="block w-full rounded-lg bg-slate-50 px-3 py-2 text-left text-sm ring-1 ring-slate-200 hover:bg-blue-50 hover:ring-blue-300"
+                >
+                  <span className="block font-semibold text-slate-900">{s.titulo}</span>
+                  <span className="text-slate-600">{s.subtitulo}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          <label className={`flex items-start gap-2 text-sm ${opciones.includes("creativo") ? "text-slate-700" : "text-slate-400"}`}>
+            <input
+              type="checkbox"
+              checked={textoIA}
+              disabled={!opciones.includes("creativo")}
+              onChange={(e) => setTextoIA(e.target.checked)}
+              className="mt-0.5 size-4"
+            />
+            <span>
+              Que la IA escriba el título dentro de la imagen (experimental)
+              <span className="block text-xs text-slate-500">
+                La IA gratis a veces escribe mal las palabras. Úselo con títulos de 2 a 4 palabras; si no, deje que el CRM ponga los textos.
+              </span>
+            </span>
+          </label>
+        </div>
         <button type="button" onClick={crear} disabled={!foto || generando} className={`${botonPrimario} w-full py-2.5`}>
           {generando ? "Generando..." : resultado ? "Generar otra versión" : "Mejorar foto"}
         </button>
@@ -275,51 +345,12 @@ export function MejorarConIA({
 
         {pieza && (
           <div className="space-y-5 rounded-2xl bg-white p-5 ring-1 ring-slate-200">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <label className="block text-sm font-medium text-slate-700">
-                Título del anuncio
-                <input
-                  value={titulo}
-                  onChange={(e) => setTitulo(e.target.value)}
-                  placeholder={elegido?.nombre}
-                  maxLength={80}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
-                />
-              </label>
-              <label className="block text-sm font-medium text-slate-700">
-                Subtítulo
-                <input
-                  value={subtitulo}
-                  onChange={(e) => setSubtitulo(e.target.value)}
-                  maxLength={120}
-                  className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-3 py-2 font-normal"
-                />
-              </label>
-            </div>
-            <div className="space-y-2">
-              <button type="button" onClick={pedirTextos} disabled={sugiriendo} className={botonSecundario}>
-                {sugiriendo ? "Pensando textos (puede tardar unos segundos)..." : "Sugerir textos con IA"}
-              </button>
-              {sugerencias.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {sugerencias.map((s) => (
-                    <button
-                      key={s.titulo}
-                      type="button"
-                      onClick={() => {
-                        setTitulo(s.titulo);
-                        setSubtitulo(s.subtitulo);
-                      }}
-                      className="rounded-lg bg-slate-50 px-3 py-2 text-left text-sm ring-1 ring-slate-200 hover:bg-blue-50 hover:ring-blue-300"
-                    >
-                      <span className="block font-semibold text-slate-900">{s.titulo}</span>
-                      <span className="text-slate-600">{s.subtitulo}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
+            {plantilla === "contacto" && (
+              <p className="text-sm text-slate-600">
+                Los textos los escribió la IA dentro de la foto; revise que estén bien escritos. Si salen con errores, pulse «Generar otra versión» o elija otra plantilla
+                para que el CRM los ponga.
+              </p>
+            )}
             <fieldset className="space-y-2 text-sm text-slate-700">
               <legend className="font-medium">Plantilla</legend>
               <div className="flex flex-wrap gap-2">

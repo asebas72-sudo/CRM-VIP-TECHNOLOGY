@@ -14,7 +14,7 @@ import {
 
 /** Anuncios para redes al estilo publicitario: foto completa, título grande y datos de contacto. */
 
-export type Plantilla = "banda" | "arriba" | "lateral" | "oferta";
+export type Plantilla = "banda" | "arriba" | "lateral" | "oferta" | "contacto";
 export type MostrarAnuncio = MostrarPieza & { redes: boolean };
 export type TextosAnuncio = { titulo: string; subtitulo: string; precio: number | null };
 
@@ -268,6 +268,41 @@ export async function dibujarAnuncio(
 
   ctx.fillStyle = "#0f172a";
   ctx.fillRect(0, 0, ANCHO, alto);
+
+  if (plantilla === "contacto") {
+    // La IA ya escribió los textos: la imagen va completa (sin recortar) y solo se agregan logo y contacto
+    const franja = datos.length ? (vertical ? 170 : 110) : 0;
+    if (foto) {
+      ctx.filter = "blur(40px) brightness(0.45)";
+      cubrir(ctx, foto, -80, -80, ANCHO + 160, alto + 160);
+      ctx.filter = "none";
+    }
+    const yFranja = vertical ? abajo - franja + 60 : alto - franja;
+    const y0 = vertical ? arriba + 150 : 0;
+    if (foto) encajar(ctx, foto, foto.width, foto.height, 0, y0, ANCHO, (datos.length ? yFranja : vertical ? abajo : alto) - y0);
+    if (vertical) await dibujarMarca(ctx, marca, mostrar, MARGEN, arriba, 110, false);
+    else await dibujarMarca(ctx, marca, mostrar, ANCHO - MARGEN + 20, 30, 64, true);
+    if (datos.length) {
+      ctx.fillStyle = color;
+      ctx.fillRect(0, yFranja, ANCHO, alto - yFranja);
+      await contactoHorizontal(ctx, datos, yFranja + (vertical ? franja - 60 : franja) / 2, vertical ? 42 : 34, textoSobre(color), color);
+    }
+    // La IA solo escribe el título; el subtítulo lo pone el CRM sobre la parte baja de la imagen
+    if (textos.subtitulo.trim()) {
+      const tam = vertical ? 44 : 34;
+      const base = (datos.length ? yFranja : vertical ? abajo : alto) - 30;
+      ctx.font = `600 ${tam}px ${FUENTE}`;
+      const lineas = lineasDeTexto(ctx, textos.subtitulo, ANCHO - MARGEN * 2 - (textos.precio !== null ? 260 : 0), 2);
+      degradado(ctx, base - lineas.length * tam * 1.3 - 60, base + 30, 0, 0.75, alto);
+      ctx.fillStyle = "#ffffff";
+      lineas.forEach((l, i) => ctx.fillText(l, MARGEN, base - (lineas.length - 1 - i) * tam * 1.3));
+    }
+    if (textos.precio !== null) {
+      const r = vertical ? 140 : 100;
+      await precioCirculo(ctx, textos.precio, color, ANCHO - MARGEN - r, (datos.length ? yFranja : alto) - r - 20, r, false);
+    }
+    return;
+  }
 
   if (plantilla === "lateral") {
     const sobre = textoSobre(color);

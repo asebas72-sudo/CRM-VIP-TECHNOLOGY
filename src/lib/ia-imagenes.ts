@@ -15,6 +15,7 @@ const OPCIONES: Record<string, (color: string) => string> = {
   fondo: () => "Replace the messy background with a clean, professional one.",
   oficina: () => "Place the scene in a modern, tidy office environment.",
   graficos: (color) => `Add subtle abstract decorative graphic shapes at the edges of the image in the color ${color}.`,
+  creativo: () => "",
 };
 
 export type ResultadoIA = { imagen?: string; error?: string };
@@ -79,11 +80,35 @@ export async function mejorarImagen(form: FormData): Promise<ResultadoIA> {
   const color = /^#[0-9a-fA-F]{6}$/.test(colorRecibido) ? colorRecibido : "#1d4ed8";
   const pedidos = form.getAll("opciones").flatMap((o) => (typeof o === "string" && OPCIONES[o] ? [OPCIONES[o](color)] : []));
   const texto = String(form.get("texto") ?? "").trim().slice(0, 300);
+  const creativo = form.getAll("opciones").includes("creativo");
+  const limpiar = (v: FormDataEntryValue | null, max: number) => String(v ?? "").replace(/["\n\r]/g, " ").trim().slice(0, max);
+  const servicio = limpiar(form.get("servicio"), 120);
+  const titulo = limpiar(form.get("titulo"), 60);
+  const conTextos = form.get("texto_ia") === "1" && Boolean(titulo);
+
+  // Modo creativo: la IA rediseña la foto como un anuncio (cambia mucho más que la simple mejora)
+  const base = creativo
+    ? "Turn this photo into a premium, eye-catching social media advertisement, like a high-end commercial ad made by a professional designer. " +
+      (servicio ? `The ad is for: ${servicio}. ` : "") +
+      "Use the photo as reference: keep the main subject recognizable, but you may reframe it, change the camera angle, and recompose the scene. " +
+      `Dramatic studio lighting, depth of field, sharp details, rich contrast, a modern high-tech background with glowing accents in the color ${color}. ` +
+      "Photorealistic commercial photography quality. Do not add people. No logos, no watermarks."
+    : BASE;
+  // El modelo gratis escribe mal los textos largos: solo se le pide el título; el subtítulo lo pone el CRM
+  const textosIA = conTextos
+    ? `Add clean, modern, professional advertising typography: one large bold headline that reads exactly "${titulo}". ` +
+      "The text is in Spanish and must be spelled exactly as written, letter by letter, perfectly legible, with good contrast. No other text. " +
+      "Keep the top-right corner and the bottom 12% of the image free of text."
+    : creativo
+      ? "No text, no letters. Leave clean empty dark space in the lower third of the image for a headline added later."
+      : "";
+  const lista = creativo ? pedidos.filter((p) => !p.startsWith("Replace the messy")) : pedidos;
 
   const solicitud = new FormData();
-  solicitud.append("prompt", [BASE, ...pedidos, texto && `Additional request: ${texto}`].filter(Boolean).join(" "));
-  solicitud.append("width", String(medida(form.get("ancho"))));
-  solicitud.append("height", String(medida(form.get("alto"))));
+  solicitud.append("prompt", [base, ...lista, textosIA, texto && `Additional request: ${texto}`].filter(Boolean).join(" "));
+  // El anuncio creativo sale cuadrado; la mejora simple conserva la forma de la foto
+  solicitud.append("width", creativo ? "1024" : String(medida(form.get("ancho"))));
+  solicitud.append("height", creativo ? "1024" : String(medida(form.get("alto"))));
   solicitud.append("input_image_0", archivo);
 
   let respuesta: Response;
