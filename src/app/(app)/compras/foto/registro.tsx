@@ -11,7 +11,8 @@ import { catalogoEmpresa, guardarCompraManual, leerFoto, type CompraManual } fro
 import { construirPlantilla, leerPlantilla } from "./excel";
 
 /** codigo: el del producto existente elegido en el buscador; vacío = producto nuevo (el sistema le pone código). */
-type Linea = { codigo: string; nombre: string; cantidad: string; costo: string; iva: string };
+/** venta: precio de venta con IVA; vacío = nuevo con precio automático o existente sin cambio. */
+type Linea = { codigo: string; nombre: string; cantidad: string; costo: string; iva: string; venta?: string };
 
 const TIPOS_DOC = [
   { valor: "recibo_caja", texto: "Recibo de caja" },
@@ -181,7 +182,16 @@ export function RegistroFoto({
     const cant = numero(l.cantidad);
     const costo = numero(l.costo);
     const sub = cant * costo;
-    return { ...l, cant, costoNum: costo, total: sub * (1 + numero(l.iva) / 100) };
+    const ventaNum = numero(l.venta ?? "");
+    return {
+      ...l,
+      cant,
+      costoNum: costo,
+      ventaNum,
+      // Precio de venta menor que el costo con IVA: se avisa, pero se permite
+      bajoCosto: ventaNum > 0 && ventaNum < costo * (1 + numero(l.iva) / 100),
+      total: sub * (1 + numero(l.iva) / 100),
+    };
   });
   const total = filas.reduce((s, f) => s + f.total, 0);
   const validas = filas.filter((f) => f.nombre.trim());
@@ -312,6 +322,7 @@ export function RegistroFoto({
         cantidad: f.cant,
         costo_unitario: f.costoNum,
         iva_porcentaje: numero(f.iva),
+        precio_venta: f.ventaNum > 0 ? Math.round(f.ventaNum) : null,
       })),
     };
     const form = new FormData();
@@ -447,13 +458,14 @@ export function RegistroFoto({
 
             {/* En pantallas grandes sin recorte, para que las sugerencias del buscador se vean completas */}
             <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200 lg:overflow-visible">
-              <table className="w-full min-w-[720px] text-left text-sm">
+              <table className="w-full min-w-[860px] text-left text-sm">
                 <thead className="border-b border-slate-200 bg-slate-50 text-slate-600">
                   <tr>
                     <th className="px-3 py-2 font-medium">Producto</th>
                     <th className="w-20 px-3 py-2 text-right font-medium">Cant.</th>
                     <th className="w-32 px-3 py-2 text-right font-medium">Costo u. sin IVA</th>
                     <th className="w-20 px-3 py-2 font-medium">IVA</th>
+                    <th className="w-36 px-3 py-2 text-right font-medium">Precio venta (IVA incl.)</th>
                     <th className="w-28 px-3 py-2 text-right font-medium">Total</th>
                     <th />
                   </tr>
@@ -508,6 +520,17 @@ export function RegistroFoto({
                               </option>
                             ))}
                           </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <input
+                            value={f.venta ?? ""}
+                            onChange={(e) => editar(i, { venta: e.target.value })}
+                            inputMode="numeric"
+                            placeholder={existente ? "Sin cambio" : "Automático"}
+                            className={`${campo} text-right ${f.bajoCosto ? "border-red-400" : ""}`}
+                            aria-label="Precio de venta"
+                          />
+                          {f.bajoCosto && <p className="mt-1 text-xs font-medium text-red-700">Menor que el costo</p>}
                         </td>
                         <td className="px-3 py-2 text-right tabular-nums">{pesos(f.total)}</td>
                         <td className="px-2 py-2">
@@ -630,6 +653,7 @@ export function RegistroFoto({
         {resultado?.ok ? (
           <p>
             Documento <strong>{resultado.numero}</strong> registrado en <strong>{resultado.empresa}</strong>.
+            {resultado.aviso && <span className="mt-2 block text-amber-800">{resultado.aviso}</span>}
           </p>
         ) : (
           <p>{resultado?.error}</p>

@@ -50,6 +50,7 @@ export type LineaManual = {
   cantidad: number;
   costo_unitario: number; // sin IVA
   iva_porcentaje: number;
+  precio_venta?: number | null; // con IVA; vacío = automático (nuevo) o sin cambio (existente)
 };
 
 export type CompraManual = {
@@ -136,6 +137,7 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   for (const l of escritas) {
     if (!(l.cantidad > 0)) return { ok: false, error: `Cantidad inválida en "${l.nombre}".` };
     if (!(l.costo_unitario >= 0)) return { ok: false, error: `Costo inválido en "${l.nombre}".` };
+    if (l.precio_venta != null && !(l.precio_venta > 0)) return { ok: false, error: `Precio de venta inválido en "${l.nombre}".` };
   }
 
   // Recibos sin NIT o sin número: se generan identificadores estables
@@ -182,6 +184,19 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   });
   if (error) return { ok: false, error: error.message };
 
+  // Precio de venta escrito en la compra: reemplaza el automático o el que tenía el producto
+  const fallidos: string[] = [];
+  for (const l of lineas) {
+    if (!l.precio_venta) continue;
+    const { error: errorPrecio } = await supabase
+      .from("productos")
+      .update({ precio_venta: Math.round(l.precio_venta), actualizado_en: new Date().toISOString() })
+      .eq("empresa_id", empresa.id)
+      .eq("codigo", l.codigo.trim());
+    if (errorPrecio) fallidos.push(l.nombre.trim());
+  }
+  const aviso = fallidos.length ? `La compra se guardó, pero no se pudo poner el precio de venta a: ${fallidos.join(", ")}.` : undefined;
+
   const archivo = form.get("archivo");
   const cambios: { origen: string; tipo_documento: string; soporte_path?: string } = {
     origen: archivo instanceof File && archivo.size > 0 ? "foto" : "manual",
@@ -196,5 +211,5 @@ export async function guardarCompraManual(form: FormData): Promise<ResultadoImpo
   }
   await supabase.from("compras").update(cambios).eq("id", compraId);
 
-  return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero };
+  return { ok: true, compraId: compraId as string, empresaId: empresa.id, empresa: empresa.nombre, numero, aviso };
 }

@@ -32,7 +32,7 @@ export type EstadoAnalisis = { error?: string; vista?: VistaPrevia };
 export type EdicionLinea = { codigo: string; nombre: string; manejaSerial: boolean };
 
 export type ResultadoImportacion =
-  | { ok: true; compraId: string; empresaId: string; empresa: string; numero: string }
+  | { ok: true; compraId: string; empresaId: string; empresa: string; numero: string; aviso?: string }
   | { ok: false; error: string };
 
 /** Empresas donde el usuario puede cargar compras (admin o bodega). */
