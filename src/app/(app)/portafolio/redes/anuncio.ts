@@ -81,6 +81,15 @@ function degradado(ctx: CanvasRenderingContext2D, y0: number, y1: number, desde:
   ctx.fillRect(0, Math.min(y0, y1), ANCHO, Math.min(Math.abs(y1 - y0), alto));
 }
 
+/** Ancho que ocupará la cápsula de la marca (0 si no se muestra). */
+async function anchoMarca(ctx: CanvasRenderingContext2D, marca: MarcaPieza, mostrar: MostrarAnuncio, alto: number): Promise<number> {
+  const logo = mostrar.logo && marca.logoUrl ? await cargarImagen(marca.logoUrl) : null;
+  if (logo) return Math.min((logo.width / logo.height) * alto, 320) + 32;
+  if (!mostrar.empresa) return 0;
+  ctx.font = `800 ${Math.round(alto * 0.42)}px ${FUENTE}`;
+  return ctx.measureText(marca.empresa).width + 40;
+}
+
 /** Logo (o nombre de la empresa) en una cápsula blanca. Devuelve el alto usado. */
 async function dibujarMarca(ctx: CanvasRenderingContext2D, marca: MarcaPieza, mostrar: MostrarAnuncio, x: number, y: number, alto: number, alDerecha: boolean): Promise<number> {
   const logo = mostrar.logo && marca.logoUrl ? await cargarImagen(marca.logoUrl) : null;
@@ -223,7 +232,16 @@ async function contactoVertical(
 }
 
 /** Contacto en una franja horizontal centrada. */
-async function contactoHorizontal(ctx: CanvasRenderingContext2D, datos: Dato[], centroY: number, tam: number, colorTexto: string, fondo: string) {
+async function contactoHorizontal(
+  ctx: CanvasRenderingContext2D,
+  datos: Dato[],
+  centroY: number,
+  tam: number,
+  colorTexto: string,
+  fondo: string,
+  x0 = MARGEN,
+  ancho = ANCHO - MARGEN * 2,
+) {
   if (datos.length === 0) return;
   const imgs = await iconos(datos, colorTexto, fondo);
   let t = tam;
@@ -231,8 +249,8 @@ async function contactoHorizontal(ctx: CanvasRenderingContext2D, datos: Dato[], 
     ctx.font = `700 ${t}px ${FUENTE}`;
     return datos.reduce((s, d) => s + t * 1.5 + ctx.measureText(d.texto).width, 0) + (datos.length - 1) * t * 1.4;
   };
-  while (medir() > ANCHO - MARGEN * 2 && t > 20) t -= 2;
-  let x = (ANCHO - medir()) / 2;
+  while (medir() > ancho && t > 18) t -= 2;
+  let x = x0 + (ancho - medir()) / 2;
   ctx.fillStyle = colorTexto;
   ctx.textBaseline = "middle";
   datos.forEach((d, i) => {
@@ -271,7 +289,9 @@ export async function dibujarAnuncio(
 
   if (plantilla === "contacto") {
     // La IA ya escribió los textos: la imagen va completa (sin recortar) y solo se agregan logo y contacto
-    const franja = datos.length ? (vertical ? 170 : 110) : 0;
+    // En cuadrada la marca va en la franja de abajo: arriba suele estar el título que escribió la IA
+    const wMarca = vertical ? 0 : await anchoMarca(ctx, marca, mostrar, 64);
+    const franja = datos.length || wMarca ? (vertical ? 170 : 110) : 0;
     if (foto) {
       ctx.filter = "blur(40px) brightness(0.45)";
       cubrir(ctx, foto, -80, -80, ANCHO + 160, alto + 160);
@@ -279,18 +299,20 @@ export async function dibujarAnuncio(
     }
     const yFranja = vertical ? abajo - franja + 60 : alto - franja;
     const y0 = vertical ? arriba + 150 : 0;
-    if (foto) encajar(ctx, foto, foto.width, foto.height, 0, y0, ANCHO, (datos.length ? yFranja : vertical ? abajo : alto) - y0);
+    const conFranja = franja > 0;
+    if (foto) encajar(ctx, foto, foto.width, foto.height, 0, y0, ANCHO, (conFranja ? yFranja : vertical ? abajo : alto) - y0);
     if (vertical) await dibujarMarca(ctx, marca, mostrar, MARGEN, arriba, 110, false);
-    else await dibujarMarca(ctx, marca, mostrar, ANCHO - MARGEN + 20, 30, 64, true);
-    if (datos.length) {
+    if (conFranja) {
       ctx.fillStyle = color;
       ctx.fillRect(0, yFranja, ANCHO, alto - yFranja);
-      await contactoHorizontal(ctx, datos, yFranja + (vertical ? franja - 60 : franja) / 2, vertical ? 42 : 34, textoSobre(color), color);
+      if (wMarca) await dibujarMarca(ctx, marca, mostrar, MARGEN, yFranja + (franja - 84) / 2, 64, false);
+      const x0 = wMarca ? MARGEN + wMarca + 30 : MARGEN;
+      await contactoHorizontal(ctx, datos, yFranja + (vertical ? franja - 60 : franja) / 2, vertical ? 42 : 34, textoSobre(color), color, x0, ANCHO - MARGEN - x0);
     }
     // La IA solo escribe el título; el subtítulo lo pone el CRM sobre la parte baja de la imagen
     if (textos.subtitulo.trim()) {
       const tam = vertical ? 44 : 34;
-      const base = (datos.length ? yFranja : vertical ? abajo : alto) - 30;
+      const base = (conFranja ? yFranja : vertical ? abajo : alto) - 30;
       ctx.font = `600 ${tam}px ${FUENTE}`;
       const lineas = lineasDeTexto(ctx, textos.subtitulo, ANCHO - MARGEN * 2 - (textos.precio !== null ? 260 : 0), 2);
       degradado(ctx, base - lineas.length * tam * 1.3 - 60, base + 30, 0, 0.75, alto);
@@ -299,7 +321,7 @@ export async function dibujarAnuncio(
     }
     if (textos.precio !== null) {
       const r = vertical ? 140 : 100;
-      await precioCirculo(ctx, textos.precio, color, ANCHO - MARGEN - r, (datos.length ? yFranja : alto) - r - 20, r, false);
+      await precioCirculo(ctx, textos.precio, color, ANCHO - MARGEN - r, (conFranja ? yFranja : alto) - r - 20, r, false);
     }
     return;
   }
