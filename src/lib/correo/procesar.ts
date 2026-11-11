@@ -12,7 +12,8 @@ import { extraerDatosPago, extraerEmpresaDeAsunto } from "./pagos";
  * tarea programada cada 15 minutos y el botón "Procesar ahora".
  */
 
-const MAX_CORREOS_POR_EJECUCION = 40;
+// Bajo a propósito: Render gratis tiene poca memoria; lo que falte se lee en la siguiente revisión
+const MAX_CORREOS_POR_EJECUCION = 20;
 
 export type ResultadoRevision = {
   correosLeidos: number;
