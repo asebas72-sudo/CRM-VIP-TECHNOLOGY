@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CodigoQR } from "@/components/codigo-qr";
 import { botonPrimario } from "@/components/dialogo";
 import { pesos } from "@/lib/formato";
@@ -15,27 +15,39 @@ type Formato = {
   ancho: string;
   alto: string;
   qr: string;
+  /** Rollo de dos columnas: medidas de cada etiqueta en mm (el CSS depende de separación y margen) */
+  dos?: { ancho: number; alto: number };
+  /** Apilada: nombre arriba, QR en el medio y precio abajo (etiquetas más altas que anchas de proporción) */
+  apilada?: boolean;
 };
 
-/** Rollo de dos columnas: el CSS depende de la separación y el margen que mida el usuario. */
-const ID_DOS_COLUMNAS = "rollo-2x50x25";
-
-function cssDosColumnas(separacion: number, margen: number): string {
-  const anchoPapel = margen * 2 + 50 * 2 + separacion;
-  // Cada fila de 2 etiquetas ocupa exactamente una "página" de 25 mm del rollo
-  return `@page { size: ${anchoPapel}mm 25mm; margin: 0 }
-    .hoja-etiquetas { display: grid !important; grid-template-columns: 50mm 50mm; column-gap: ${separacion}mm; padding-left: ${margen}mm; }
+function cssDosColumnas(ancho: number, alto: number, separacion: number, margen: number): string {
+  const anchoPapel = margen * 2 + ancho * 2 + separacion;
+  // Cada fila de 2 etiquetas ocupa exactamente una "página" del alto de la etiqueta
+  return `@page { size: ${anchoPapel}mm ${alto}mm; margin: 0 }
+    .hoja-etiquetas { display: grid !important; grid-template-columns: ${ancho}mm ${ancho}mm; column-gap: ${separacion}mm; padding-left: ${margen}mm; }
     .etiqueta { break-inside: avoid }`;
 }
 
 const FORMATOS: Formato[] = [
   {
-    id: ID_DOS_COLUMNAS,
+    id: "rollo-2x43x33",
+    texto: "Rollo térmico 2 columnas · 43 × 33 mm",
+    ancho: "43mm",
+    alto: "33mm",
+    qr: "18mm",
+    dos: { ancho: 43, alto: 33 },
+    apilada: true,
+    css: cssDosColumnas(43, 33, 2, 1),
+  },
+  {
+    id: "rollo-2x50x25",
     texto: "Rollo térmico 2 columnas · 50 × 25 mm",
     ancho: "50mm",
     alto: "25mm",
     qr: "21mm",
-    css: cssDosColumnas(2, 1),
+    dos: { ancho: 50, alto: 25 },
+    css: cssDosColumnas(50, 25, 2, 1),
   },
   {
     id: "rollo-50x25",
@@ -63,6 +75,8 @@ const FORMATOS: Formato[] = [
   },
 ];
 
+const CLAVE_AJUSTES = "etiquetas-ajustes";
+
 export function GeneradorEtiquetas({
   productos,
   preseleccion,
@@ -72,14 +86,45 @@ export function GeneradorEtiquetas({
 }) {
   const [cantidades, setCantidades] = useState<Record<string, number>>(preseleccion);
   const [busqueda, setBusqueda] = useState("");
-  const [formatoId, setFormatoId] = useState(FORMATOS[0].id);
+  const [formatoId, setFormatoIdBase] = useState(FORMATOS[0].id);
   const [conPrecio, setConPrecio] = useState(true);
   // Ajuste fino del rollo de 2 columnas (milímetros)
-  const [separacion, setSeparacion] = useState(2);
-  const [margen, setMargen] = useState(1);
-  const dosColumnas = formatoId === ID_DOS_COLUMNAS;
+  const [separacion, setSeparacionBase] = useState(2);
+  const [margen, setMargenBase] = useState(1);
+
+  // El formato y el ajuste quedan recordados en este equipo (cada impresora tiene su rollo)
+  useEffect(() => {
+    try {
+      const guardado = JSON.parse(localStorage.getItem(CLAVE_AJUSTES) ?? "null") as { formatoId?: string; separacion?: number; margen?: number } | null;
+      if (!guardado) return;
+      /* eslint-disable react-hooks/set-state-in-effect -- se lee una sola vez lo guardado en el navegador */
+      if (FORMATOS.some((f) => f.id === guardado.formatoId)) setFormatoIdBase(guardado.formatoId!);
+      if (typeof guardado.separacion === "number") setSeparacionBase(guardado.separacion);
+      if (typeof guardado.margen === "number") setMargenBase(guardado.margen);
+      /* eslint-enable react-hooks/set-state-in-effect */
+    } catch {}
+  }, []);
+  const guardar = (cambios: { formatoId?: string; separacion?: number; margen?: number }) => {
+    try {
+      localStorage.setItem(CLAVE_AJUSTES, JSON.stringify({ formatoId, separacion, margen, ...cambios }));
+    } catch {}
+  };
+  const setFormatoId = (v: string) => {
+    setFormatoIdBase(v);
+    guardar({ formatoId: v });
+  };
+  const setSeparacion = (v: number) => {
+    setSeparacionBase(v);
+    guardar({ separacion: v });
+  };
+  const setMargen = (v: number) => {
+    setMargenBase(v);
+    guardar({ margen: v });
+  };
+
   const base = FORMATOS.find((f) => f.id === formatoId)!;
-  const formato = dosColumnas ? { ...base, css: cssDosColumnas(separacion, margen) } : base;
+  const dosColumnas = Boolean(base.dos);
+  const formato = base.dos ? { ...base, css: cssDosColumnas(base.dos.ancho, base.dos.alto, separacion, margen) } : base;
 
   const visibles = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -208,7 +253,7 @@ export function GeneradorEtiquetas({
                 </label>
               </div>
               <p className="text-xs text-slate-500">
-                Papel: <strong>{margen * 2 + 100 + separacion} × 25 mm</strong> · {Math.ceil(total / 2)} fila(s)
+                Papel: <strong>{margen * 2 + (base.dos?.ancho ?? 0) * 2 + separacion} × {base.dos?.alto} mm</strong> · {Math.ceil(total / 2)} fila(s)
                 {total % 2 === 1 && " · la última fila queda con la etiqueta derecha en blanco"}
               </p>
             </div>
@@ -266,6 +311,23 @@ export function GeneradorEtiquetas({
 }
 
 function Etiqueta({ producto, formato, conPrecio }: { producto: ProductoEtiqueta; formato: Formato; conPrecio: boolean }) {
+  if (formato.apilada) {
+    return (
+      <div
+        className="etiqueta flex flex-col overflow-hidden bg-white px-[1.5mm] py-[1.2mm] text-black"
+        style={{ width: formato.ancho, height: formato.alto }}
+      >
+        <p className="line-clamp-2 text-[7pt] leading-tight font-semibold">{producto.nombre}</p>
+        <div className="flex min-h-0 flex-1 items-center gap-[1.5mm]">
+          <div className="shrink-0">
+            <CodigoQR valor={producto.codigo} tamano={formato.qr} />
+          </div>
+          <p className="min-w-0 font-mono text-[7pt] leading-tight break-all">{producto.codigo}</p>
+        </div>
+        {conPrecio && <p className="text-center text-[12pt] leading-none font-bold">{pesos(producto.precio_venta)}</p>}
+      </div>
+    );
+  }
   return (
     <div
       className="etiqueta flex items-center gap-[1.5mm] overflow-hidden bg-white p-[1.5mm] text-black"
