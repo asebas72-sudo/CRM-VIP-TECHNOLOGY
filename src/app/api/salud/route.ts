@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { clientePublico } from "@/lib/supabase/publico";
 
 export const dynamic = "force-dynamic";
 
@@ -7,10 +7,7 @@ export const dynamic = "force-dynamic";
  * el servidor y Supabase no pause la base de datos por inactividad.
  */
 export async function GET() {
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-  );
+  const supabase = clientePublico();
   const { error } = await supabase.from("empresas").select("id").limit(1);
 
   // Memoria del servidor en MB, para vigilar el límite de Render gratis (512 MB)

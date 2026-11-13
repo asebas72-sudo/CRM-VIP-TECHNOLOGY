@@ -1,6 +1,6 @@
-import { createClient } from "@supabase/supabase-js";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { clientePublico } from "@/lib/supabase/publico";
 import { urlImagenPortafolio, type PortafolioPublico } from "@/lib/portafolio";
 import { VistaCatalogo } from "./vista";
 
@@ -9,9 +9,7 @@ export const dynamic = "force-dynamic";
 
 async function cargar(slug: string): Promise<PortafolioPublico | null> {
   // Sin sesión: la función de la base solo entrega los datos públicos
-  const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
-    auth: { persistSession: false },
-  });
+  const supabase = clientePublico();
   const { data, error } = await supabase.rpc("portafolio_publico", { p_slug: slug });
   if (error) throw new Error(error.message);
   return (data as PortafolioPublico | null) ?? null;
