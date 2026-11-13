@@ -30,22 +30,41 @@ function decodificar(bytes: Uint8Array): string {
   return utf8.includes("�") ? new TextDecoder("latin1").decode(bytes) : utf8;
 }
 
-/** XML de los adjuntos: dentro de .zip o sueltos. */
-function xmlsDelCorreo(correo: ParsedMail): { archivo: string; xml: string }[] {
-  const salida: { archivo: string; xml: string }[] = [];
-  for (const adjunto of correo.attachments) {
-    const nombre = (adjunto.filename ?? "").toLowerCase();
-    if (nombre.endsWith(".zip")) {
-      const archivos = unzipSync(new Uint8Array(adjunto.content));
-      for (const [ruta, bytes] of Object.entries(archivos)) {
-        if (ruta.toLowerCase().endsWith(".xml")) salida.push({ archivo: adjunto.filename ?? ruta, xml: decodificar(bytes) });
-      }
-    } else if (nombre.endsWith(".xml")) {
-      salida.push({ archivo: adjunto.filename ?? "factura.xml", xml: decodificar(new Uint8Array(adjunto.content)) });
-    }
+/** XML de un adjunto: dentro de un .zip (solo se descomprimen los .xml, no los PDF) o suelto. */
+function xmlsDelAdjunto(nombreArchivo: string, contenido: Uint8Array): { archivo: string; xml: string }[] {
+  const nombre = nombreArchivo.toLowerCase();
+  if (nombre.endsWith(".zip")) {
+    const archivos = unzipSync(contenido, { filter: (f) => f.name.toLowerCase().endsWith(".xml") });
+    return Object.values(archivos).map((bytes) => ({ archivo: nombreArchivo, xml: decodificar(bytes) }));
   }
+  if (nombre.endsWith(".xml")) return [{ archivo: nombreArchivo, xml: decodificar(contenido) }];
+  return [];
+}
+
+type NodoCorreo = {
+  part?: string;
+  dispositionParameters?: Record<string, string>;
+  parameters?: Record<string, string>;
+  childNodes?: NodoCorreo[];
+};
+
+/** Partes del correo que son .zip o .xml (sin descargar el resto: PDF, imágenes...). */
+function adjuntosFactura(nodo: NodoCorreo | undefined, salida: { part: string; nombre: string }[] = []) {
+  if (!nodo) return salida;
+  const nombre = nodo.dispositionParameters?.filename ?? nodo.parameters?.name ?? "";
+  if (nodo.part && /\.(zip|xml)$/i.test(nombre)) salida.push({ part: nodo.part, nombre });
+  nodo.childNodes?.forEach((h) => adjuntosFactura(h, salida));
   return salida;
 }
+
+async function leerFlujo(flujo: NodeJS.ReadableStream): Promise<Uint8Array> {
+  const trozos: Buffer[] = [];
+  for await (const t of flujo) trozos.push(Buffer.isBuffer(t) ? t : Buffer.from(t as string));
+  return new Uint8Array(Buffer.concat(trozos));
+}
+
+// Una sola revisión a la vez: si el cron y el botón coinciden, la segunda no duplica la memoria
+let revisando = false;
 
 /** Datos básicos de la factura: primero con el lector DIAN completo y, si falla, por texto (como el Apps Script). */
 function datosFactura(xml: string) {
@@ -90,9 +109,11 @@ function datosFactura(xml: string) {
 }
 
 /** Las facturas entran sin empresa: el superadmin la elige en "Facturas compras". */
-async function guardarFacturas(admin: Admin, correo: ParsedMail, correoId: string) {
+type DatosCorreo = { asunto: string | null; remitente: string | null };
+
+async function guardarFacturas(admin: Admin, correo: DatosCorreo, xmls: { archivo: string; xml: string }[], correoId: string) {
   let nuevas = 0;
-  for (const { archivo, xml } of xmlsDelCorreo(correo)) {
+  for (const { archivo, xml } of xmls) {
     const d = datosFactura(xml);
     if (!d) continue;
     const { data } = await admin
@@ -108,8 +129,8 @@ async function guardarFacturas(admin: Admin, correo: ParsedMail, correoId: strin
           cliente_nit: d.clienteNit,
           monto: d.monto,
           empresa_id: null,
-          asunto: correo.subject ?? null,
-          remitente: correo.from?.text ?? null,
+          asunto: correo.asunto,
+          remitente: correo.remitente,
           archivo,
           correo_id: correoId,
           xml,
@@ -152,6 +173,16 @@ async function guardarPagos(admin: Admin, correo: ParsedMail, correoId: string, 
 }
 
 export async function revisarCorreo(): Promise<ResultadoRevision> {
+  if (revisando) throw new Error("Ya hay una revisión del correo en curso. Intente en un par de minutos.");
+  revisando = true;
+  try {
+    return await revisarCorreoSinBloqueo();
+  } finally {
+    revisando = false;
+  }
+}
+
+async function revisarCorreoSinBloqueo(): Promise<ResultadoRevision> {
   const usuario = process.env.GMAIL_USUARIO;
   const clave = process.env.GMAIL_CLAVE_APP;
   if (!usuario || !clave) {
@@ -202,25 +233,55 @@ export async function revisarCorreo(): Promise<ResultadoRevision> {
 
       resultado.pendientes = Math.max(0, porProcesar.length - MAX_CORREOS_POR_EJECUCION);
       for (const p of porProcesar.slice(0, MAX_CORREOS_POR_EJECUCION)) {
-        const mensaje = await cliente.fetchOne(String(p.uid), { source: true }, { uid: true });
-        if (!mensaje || !mensaje.source) continue;
-        const correo = await simpleParser(mensaje.source);
+        // Facturas: solo el encabezado y los adjuntos .zip/.xml. Pagos: correo completo (son solo texto)
+        let datos: DatosCorreo & { fecha: string | null };
+        let correoPago: ParsedMail | null = null;
+        let xmls: { archivo: string; xml: string }[] = [];
+        if (p.tipo === "factura") {
+          const info = await cliente.fetchOne(String(p.uid), { envelope: true, bodyStructure: true }, { uid: true });
+          if (!info) continue;
+          const de = info.envelope?.from?.[0];
+          datos = {
+            asunto: info.envelope?.subject ?? null,
+            remitente: de ? (de.name ? `"${de.name}" <${de.address}>` : (de.address ?? null)) : null,
+            fecha: info.envelope?.date ? new Date(info.envelope.date).toISOString() : null,
+          };
+          for (const adjunto of adjuntosFactura(info.bodyStructure as NodoCorreo)) {
+            const { content } = await cliente.download(String(p.uid), adjunto.part, { uid: true });
+            if (!content) continue;
+            xmls.push(...xmlsDelAdjunto(adjunto.nombre, await leerFlujo(content)));
+          }
+          // Respaldo: si no se reconocieron los adjuntos por la estructura, se lee el correo completo como antes
+          if (xmls.length === 0) {
+            const mensaje = await cliente.fetchOne(String(p.uid), { source: true }, { uid: true });
+            if (mensaje && mensaje.source) {
+              const completo = await simpleParser(mensaje.source);
+              for (const a of completo.attachments) xmls.push(...xmlsDelAdjunto(a.filename ?? "", new Uint8Array(a.content)));
+            }
+          }
+        } else {
+          const mensaje = await cliente.fetchOne(String(p.uid), { source: true }, { uid: true });
+          if (!mensaje || !mensaje.source) continue;
+          correoPago = await simpleParser(mensaje.source);
+          datos = { asunto: correoPago.subject ?? null, remitente: correoPago.from?.text ?? null, fecha: correoPago.date?.toISOString() ?? null };
+        }
         resultado.correosLeidos += 1;
 
         await admin.from("correos_procesados").upsert({
           id: p.id,
           tipo: p.tipo,
           estado: "ok",
-          asunto: correo.subject ?? null,
-          remitente: correo.from?.text ?? null,
-          fecha_correo: correo.date?.toISOString() ?? null,
+          asunto: datos.asunto,
+          remitente: datos.remitente,
+          fecha_correo: datos.fecha,
         });
 
         try {
           const nuevos =
             p.tipo === "factura"
-              ? await guardarFacturas(admin, correo, p.id)
-              : await guardarPagos(admin, correo, p.id, config.prefijo_factura_pago);
+              ? await guardarFacturas(admin, datos, xmls, p.id)
+              : await guardarPagos(admin, correoPago!, p.id, config.prefijo_factura_pago);
+          xmls = [];
           if (p.tipo === "factura") resultado.facturasNuevas += nuevos;
           else resultado.pagosNuevos += nuevos;
           if (nuevos === 0) {
