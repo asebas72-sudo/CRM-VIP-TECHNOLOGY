@@ -91,23 +91,35 @@ export function GeneradorEtiquetas({
   // Ajuste fino del rollo de 2 columnas (milímetros)
   const [separacion, setSeparacionBase] = useState(2);
   const [margen, setMargenBase] = useState(1);
+  // Corrimiento vertical (mm): negativo sube el contenido, positivo lo baja
+  const [vertical, setVerticalBase] = useState(0);
 
   // El formato y el ajuste quedan recordados en este equipo (cada impresora tiene su rollo)
   useEffect(() => {
     try {
-      const guardado = JSON.parse(localStorage.getItem(CLAVE_AJUSTES) ?? "null") as { formatoId?: string; separacion?: number; margen?: number } | null;
+      const guardado = JSON.parse(localStorage.getItem(CLAVE_AJUSTES) ?? "null") as {
+        formatoId?: string;
+        separacion?: number;
+        margen?: number;
+        vertical?: number;
+      } | null;
       if (!guardado) return;
       /* eslint-disable react-hooks/set-state-in-effect -- se lee una sola vez lo guardado en el navegador */
       if (FORMATOS.some((f) => f.id === guardado.formatoId)) setFormatoIdBase(guardado.formatoId!);
       if (typeof guardado.separacion === "number") setSeparacionBase(guardado.separacion);
       if (typeof guardado.margen === "number") setMargenBase(guardado.margen);
+      if (typeof guardado.vertical === "number") setVerticalBase(guardado.vertical);
       /* eslint-enable react-hooks/set-state-in-effect */
     } catch {}
   }, []);
-  const guardar = (cambios: { formatoId?: string; separacion?: number; margen?: number }) => {
+  const guardar = (cambios: { formatoId?: string; separacion?: number; margen?: number; vertical?: number }) => {
     try {
-      localStorage.setItem(CLAVE_AJUSTES, JSON.stringify({ formatoId, separacion, margen, ...cambios }));
+      localStorage.setItem(CLAVE_AJUSTES, JSON.stringify({ formatoId, separacion, margen, vertical, ...cambios }));
     } catch {}
+  };
+  const setVertical = (v: number) => {
+    setVerticalBase(v);
+    guardar({ vertical: v });
   };
   const setFormatoId = (v: string) => {
     setFormatoIdBase(v);
@@ -145,7 +157,7 @@ export function GeneradorEtiquetas({
 
   return (
     <>
-      <style>{`@media print { ${formato.css} }`}</style>
+      <style>{`@media print { ${formato.css} html, body { margin: 0 !important; padding: 0 !important } .etiqueta { position: relative; top: ${vertical}mm } }`}</style>
 
       <div className="grid gap-6 print:hidden lg:grid-cols-[1fr_320px]">
         <div className="space-y-3">
@@ -258,6 +270,21 @@ export function GeneradorEtiquetas({
               </p>
             </div>
           )}
+          <label className="block text-sm font-medium text-slate-700">
+            Ajuste vertical (mm)
+            <span className="block text-xs font-normal text-slate-500">
+              Si sale muy abajo o cortada, ponga un número negativo (ej. -5) para subirla; positivo la baja.
+            </span>
+            <input
+              type="number"
+              step="0.5"
+              min={-20}
+              max={20}
+              value={vertical}
+              onChange={(e) => setVertical(Math.min(20, Math.max(-20, Number(e.target.value) || 0)))}
+              className="mt-1 w-28 rounded-md border border-slate-300 px-2 py-1 font-normal"
+            />
+          </label>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={conPrecio} onChange={(e) => setConPrecio(e.target.checked)} />
             Mostrar precio en la etiqueta
@@ -269,8 +296,8 @@ export function GeneradorEtiquetas({
             Imprimir etiquetas
           </button>
           <p className="text-xs text-slate-500">
-            En la ventana de impresión elija su impresora de etiquetas, tamaño de papel igual al formato y márgenes
-            &quot;Ninguno&quot;. También puede guardar como PDF.
+            En la ventana de impresión elija su impresora de etiquetas, tamaño de papel igual al indicado arriba, márgenes
+            &quot;Ninguno&quot; y escala 100 %. Pruebe primero con 2 etiquetas. También puede guardar como PDF.
           </p>
           {total > 0 && (
             <div>
