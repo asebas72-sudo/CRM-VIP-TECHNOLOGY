@@ -126,7 +126,17 @@ export default async function PaginaProductos({ searchParams }: PageProps<"/prod
           {puedeEditar && " · edite el precio y presione Guardar o Enter"}
         </p>
         </div>
-        {pestanas}
+        <div className="flex flex-wrap items-center gap-3">
+          {pestanas}
+          {puedeEditar && (
+            <Link
+              href="/productos/nuevo"
+              className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              + Nuevo producto
+            </Link>
+          )}
+        </div>
       </div>
 
       <FormularioBusqueda>

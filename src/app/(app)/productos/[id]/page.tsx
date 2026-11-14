@@ -25,8 +25,9 @@ type Movimiento = {
   ventas: { id: string; consecutivo: number } | null;
 };
 
-export default async function DetalleProducto({ params }: PageProps<"/productos/[id]">) {
+export default async function DetalleProducto({ params, searchParams }: PageProps<"/productos/[id]">) {
   const { id } = await params;
+  const { aviso } = await searchParams;
   const { activa } = await sesionActual();
   if (!activa) notFound();
   const puedeEditar = activa.rol === "admin" || activa.rol === "bodega";
@@ -77,6 +78,12 @@ export default async function DetalleProducto({ params }: PageProps<"/productos/
           </div>
         </div>
       </div>
+
+      {aviso === "sin-stock" && (
+        <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200">
+          El producto se creó, pero no se pudo cargar la cantidad inicial. Agréguela con «Ajuste de inventario».
+        </p>
+      )}
 
       {puedeEditar && (
         <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
