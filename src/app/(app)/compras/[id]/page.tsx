@@ -26,7 +26,7 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
   const { data: compra } = await supabase
     .from("compras")
     .select(
-      "id, numero_factura, cufe, fecha, subtotal, iva, total, xml_path, pdf_path, soporte_path, origen, creado_en, proveedores (nombre, nit)," +
+      "id, numero_factura, cufe, fecha, es_inversion, subtotal, iva, total, xml_path, pdf_path, soporte_path, origen, creado_en, proveedores (nombre, nit)," +
         " compra_items (id, descripcion, codigo_proveedor, cantidad, costo_unitario, iva_porcentaje, total," +
         " productos (codigo, nombre), seriales (serial, estado))",
     )
@@ -39,6 +39,7 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
     numero_factura: string;
     cufe: string | null;
     fecha: string;
+    es_inversion: boolean;
     subtotal: number;
     iva: number;
     total: number;
@@ -70,7 +71,12 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
         </Link>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Factura {c.numero_factura}</h1>
+            <h1 className="flex flex-wrap items-center gap-2 text-2xl font-bold text-slate-900">
+              Factura {c.numero_factura}
+              {c.es_inversion && (
+                <span className="rounded-full bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-800">Inversión inicial</span>
+              )}
+            </h1>
             <p className="text-sm text-slate-500">
               {c.proveedores.nombre} · NIT {c.proveedores.nit} · {fecha(c.fecha)}
             </p>

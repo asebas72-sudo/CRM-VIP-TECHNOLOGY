@@ -113,7 +113,15 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
         />
         <Indicador titulo="Número de ventas" valor={cantidad(k.numeroVentas)} detalle={`Ticket promedio ${pesos(k.ticket)} · ${cantidad(k.unidades)} und.`} />
         <Indicador titulo="Dinero recibido" valor={pesos(k.recaudo)} detalle="Pagos de contado y abonos del periodo" />
-        <Indicador titulo="Compras" valor={pesos(k.compras)} detalle={`${k.numeroCompras} factura(s) de proveedores`} />
+        <Indicador
+          titulo="Compras"
+          valor={pesos(k.compras)}
+          detalle={
+            k.comprasInversion > 0
+              ? `${k.numeroCompras} factura(s) · aparte, inversión inicial ${pesos(k.comprasInversion)} (${k.numeroComprasInversion})`
+              : `${k.numeroCompras} factura(s) de proveedores`
+          }
+        />
         <Indicador titulo="Gastos e inversiones" valor={pesos(k.gastos + k.inversiones)} detalle={`Gastos ${pesos(k.gastos)} · inversiones ${pesos(k.inversiones)}`} enlace="/gastos" />
         <Indicador
           titulo="Inventario al costo"
@@ -277,7 +285,15 @@ function ResumenPorEmpresa({ filas, total }: { filas: (Kpi & { empresaId: string
     { titulo: "No. ventas", valor: (k) => cantidad(k.numeroVentas) },
     { titulo: "Ticket prom.", valor: (k) => pesos(k.ticket) },
     { titulo: "Recibido", valor: (k) => pesos(k.recaudo) },
-    { titulo: "Compras", valor: (k) => pesos(k.compras) },
+    {
+      titulo: "Compras",
+      valor: (k) => (
+        <>
+          {pesos(k.compras)}
+          {k.comprasInversion > 0 && <span className="block text-xs text-violet-700">+ inversión {pesos(k.comprasInversion)}</span>}
+        </>
+      ),
+    },
     { titulo: "Gastos", valor: (k) => pesos(k.gastos) },
     { titulo: "Inversiones", valor: (k) => pesos(k.inversiones) },
     { titulo: "Utilidad neta", valor: (k) => pesos(k.utilidadNeta) },
@@ -349,16 +365,26 @@ function CuadreCaja({ informe }: { informe: Informe }) {
   const compras = informe.cuadre.reduce((s, d) => s + d.compras, 0);
   const gastos = informe.cuadre.reduce((s, d) => s + d.gastos, 0);
   const inversiones = informe.cuadre.reduce((s, d) => s + d.inversiones, 0);
+  const inversionInicial = informe.cuadre.reduce((s, d) => s + d.inversionInicial, 0);
   const salio = (d: { compras: number; gastos: number; inversiones: number }) => d.compras + d.gastos + d.inversiones;
   const diferencia = recibido - compras - gastos - inversiones;
-  const dias = informe.cuadre.filter((d) => d.recibido > 0 || salio(d) > 0).reverse();
+  const dias = informe.cuadre.filter((d) => d.recibido > 0 || salio(d) > 0 || d.inversionInicial > 0).reverse();
 
   return (
     <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
       <h3 className="font-semibold text-slate-900">Cuadre: lo que entró contra lo que salió</h3>
       <p className="text-xs text-slate-500">
         Entró = dinero recibido por ventas de contado y abonos. Salió = compras de mercancía + gastos + inversiones del periodo.
+        Las compras marcadas como inversión inicial van aparte.
       </p>
+
+      {inversionInicial > 0 && (
+        <div className="mt-4 rounded-xl bg-violet-50 p-4 ring-1 ring-violet-200">
+          <p className="text-sm text-violet-800">Inversión inicial en mercancía (capital de los socios)</p>
+          <p className="text-2xl font-bold text-violet-900 tabular-nums">{pesos(inversionInicial)}</p>
+          <p className="text-xs text-violet-700">No se resta de lo que entró por ventas: esa plata no salió de la caja del negocio.</p>
+        </div>
+      )}
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl bg-green-50 p-4 ring-1 ring-green-200">
@@ -408,7 +434,12 @@ function CuadreCaja({ informe }: { informe: Informe }) {
                       <td className="px-3 py-1.5 text-green-700">{pesos(d.recibido)}</td>
                       <td className="px-3 py-1.5 text-red-700">{d.compras ? pesos(d.compras) : "—"}</td>
                       <td className="px-3 py-1.5 text-orange-700">{d.gastos ? pesos(d.gastos) : "—"}</td>
-                      <td className="px-3 py-1.5 text-violet-700">{d.inversiones ? pesos(d.inversiones) : "—"}</td>
+                      <td className="px-3 py-1.5 text-violet-700">
+                        {d.inversiones ? pesos(d.inversiones) : "—"}
+                        {d.inversionInicial > 0 && (
+                          <span className="block text-xs text-violet-500">inicial {pesos(d.inversionInicial)}</span>
+                        )}
+                      </td>
                       <td className={`px-3 py-1.5 font-semibold ${d.recibido - salio(d) < 0 ? "text-amber-700" : "text-slate-900"}`}>
                         {pesos(d.recibido - salio(d))}
                       </td>
@@ -444,9 +475,12 @@ function CuadreCaja({ informe }: { informe: Informe }) {
                         <span className="block text-xs text-slate-500">
                           N.º {c.numero}
                           {c.empresa && ` · ${c.empresa}`}
+                          {c.esInversion && <span className="ml-1 font-semibold text-violet-700">· Inversión inicial</span>}
                         </span>
                       </td>
-                      <td className="px-3 py-1.5 text-right tabular-nums text-red-700">{pesos(c.total)}</td>
+                      <td className={`px-3 py-1.5 text-right tabular-nums ${c.esInversion ? "text-violet-700" : "text-red-700"}`}>
+                        {pesos(c.total)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>

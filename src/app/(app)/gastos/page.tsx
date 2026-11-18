@@ -42,6 +42,20 @@ export default async function PaginaGastos({ searchParams }: PageProps<"/gastos"
     .order("creado_en", { ascending: false })
     .limit(1000);
 
+  // Compras de mercancía marcadas como inversión inicial en el mes (si la migración 0020 no está, no se muestran)
+  const comprasInversionRes = esAdmin
+    ? await supabase
+        .from("compras")
+        .select("total")
+        .eq("empresa_id", activa.id)
+        .eq("es_inversion", true)
+        .gte("fecha", `${mes}-01`)
+        .lte("fecha", finMes)
+    : null;
+  const comprasInversion = comprasInversionRes?.error
+    ? 0
+    : (comprasInversionRes?.data ?? []).reduce((s, c) => s + Number(c.total), 0);
+
   const gastos = (data ?? []) as Gasto[];
   const total = (tipo: string) => gastos.filter((g) => g.tipo === tipo).reduce((s, g) => s + Number(g.valor), 0);
   const fecha = (d: string) =>
@@ -84,6 +98,14 @@ export default async function PaginaGastos({ searchParams }: PageProps<"/gastos"
                 <span className="rounded-lg bg-violet-50 px-3 py-1.5 text-violet-800 ring-1 ring-violet-200">
                   Inversiones <strong className="tabular-nums">{pesos(total("inversion"))}</strong>
                 </span>
+                {comprasInversion > 0 && (
+                  <Link
+                    href="/compras"
+                    className="rounded-lg bg-violet-50 px-3 py-1.5 text-violet-800 ring-1 ring-violet-200 hover:bg-violet-100"
+                  >
+                    + Mercancía como inversión <strong className="tabular-nums">{pesos(comprasInversion)}</strong>
+                  </Link>
+                )}
               </div>
             </div>
             {!esAdmin && <p className="text-xs text-slate-500">Usted ve los registros que hizo. El administrador ve todos.</p>}

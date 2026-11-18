@@ -32,12 +32,13 @@ export function EditorCompra({
 }: {
   compraId: string;
   proveedores: { id: string; nombre: string; nit: string | null }[];
-  cabecera: { proveedor_id: string; numero_factura: string; fecha: string };
+  cabecera: { proveedor_id: string; numero_factura: string; fecha: string; es_inversion: boolean };
   lineas: LineaEditable[];
 }) {
   const [proveedor, setProveedor] = useState(cabecera.proveedor_id);
   const [numero, setNumero] = useState(cabecera.numero_factura);
   const [fecha, setFecha] = useState(cabecera.fecha);
+  const [esInversion, setEsInversion] = useState(cabecera.es_inversion);
   const [lineas, setLineas] = useState<Linea[]>(
     iniciales.map((l) => ({ ...l, quitar: false, cantidadOriginal: l.cantidad })),
   );
@@ -60,6 +61,7 @@ export function EditorCompra({
         proveedor_id: proveedor,
         numero_factura: numero.trim(),
         fecha,
+        es_inversion: esInversion,
         items: lineas.map((l) => ({
           id: l.id,
           cantidad: l.cantidad,
@@ -96,6 +98,26 @@ export function EditorCompra({
           <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className={`mt-1 ${campo}`} />
         </label>
       </div>
+
+      <label
+        className={`flex cursor-pointer items-start gap-3 rounded-2xl p-4 ring-1 ${
+          esInversion ? "bg-violet-50 ring-violet-300" : "bg-white ring-slate-200"
+        }`}
+      >
+        <input
+          type="checkbox"
+          checked={esInversion}
+          onChange={(e) => setEsInversion(e.target.checked)}
+          className="mt-1 h-4 w-4 accent-violet-700"
+        />
+        <span>
+          <span className="block font-semibold text-slate-900">Es inversión inicial</span>
+          <span className="block text-sm text-slate-600">
+            Mercancía comprada con el capital de los socios para arrancar. En Informes se muestra aparte y no se resta de lo
+            que entró por ventas. El inventario no cambia.
+          </span>
+        </span>
+      </label>
 
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-slate-200">
         <table className="w-full min-w-[860px] text-left text-sm">

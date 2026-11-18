@@ -24,7 +24,7 @@ export default async function EditarCompra({ params }: PageProps<"/compras/[id]/
     supabase
       .from("compras")
       .select(
-        "id, proveedor_id, numero_factura, fecha, compra_items (id, descripcion, cantidad, costo_unitario, iva_porcentaje, productos (codigo, nombre), seriales (id))",
+        "id, proveedor_id, numero_factura, fecha, es_inversion, compra_items (id, descripcion, cantidad, costo_unitario, iva_porcentaje, productos (codigo, nombre), seriales (id))",
       )
       .eq("empresa_id", activa.id)
       .eq("id", id)
@@ -37,6 +37,7 @@ export default async function EditarCompra({ params }: PageProps<"/compras/[id]/
     proveedor_id: string;
     numero_factura: string;
     fecha: string;
+    es_inversion: boolean;
     compra_items: Item[];
   };
 
@@ -64,7 +65,7 @@ export default async function EditarCompra({ params }: PageProps<"/compras/[id]/
       <EditorCompra
         compraId={id}
         proveedores={proveedoresRes.data ?? []}
-        cabecera={{ proveedor_id: c.proveedor_id, numero_factura: c.numero_factura, fecha: c.fecha }}
+        cabecera={{ proveedor_id: c.proveedor_id, numero_factura: c.numero_factura, fecha: c.fecha, es_inversion: c.es_inversion }}
         lineas={lineas}
       />
     </div>

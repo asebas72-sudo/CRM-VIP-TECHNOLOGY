@@ -89,8 +89,12 @@ export type Informe = {
     ticket: number;
     unidades: number;
     recaudo: number;
+    /** Compras normales (reposición); no incluye las marcadas como inversión */
     compras: number;
     numeroCompras: number;
+    /** Compras marcadas como inversión inicial (capital de los socios) */
+    comprasInversion: number;
+    numeroComprasInversion: number;
     gastos: number;
     inversiones: number;
     /** Utilidad bruta menos gastos (las inversiones no restan) */
@@ -110,10 +114,10 @@ export type Informe = {
   /** Dinero recibido (contado + abonos) por forma de pago */
   recibidoPorForma: { forma: string; valor: number; pagos: number }[];
   /** Cruce día a día: lo que entró por ventas contra lo que salió en compras */
-  cuadre: { dia: string; recibido: number; compras: number; gastos: number; inversiones: number }[];
+  cuadre: { dia: string; recibido: number; compras: number; gastos: number; inversiones: number; inversionInicial: number }[];
   /** Gastos e inversiones por categoría */
   porCategoriaGasto: (Fila & { tipo: string })[];
-  comprasDetalle: { id: string; fecha: string; proveedor: string; numero: string; total: number; empresa: string }[];
+  comprasDetalle: { id: string; fecha: string; proveedor: string; numero: string; total: number; empresa: string; esInversion: boolean }[];
   topProductos: Fila[];
   porEmpresa: Fila[];
   porVendedor: Fila[];
@@ -183,7 +187,7 @@ export async function construirInforme(
       .limit(20000),
     supabase
       .from("compras")
-      .select("id, empresa_id, fecha, numero_factura, total, proveedores (nombre)")
+      .select("id, empresa_id, fecha, numero_factura, total, es_inversion, proveedores (nombre)")
       .in("empresa_id", ids)
       .gte("fecha", periodo.desde)
       .lte("fecha", periodo.hasta)
@@ -323,7 +327,15 @@ export async function construirInforme(
   ).slice(0, 10);
 
   // --- Compras ---
-  type Compra = { id: string; empresa_id: string; fecha: string; numero_factura: string; total: number; proveedores: { nombre: string } | null };
+  type Compra = {
+    id: string;
+    empresa_id: string;
+    fecha: string;
+    numero_factura: string;
+    total: number;
+    es_inversion: boolean;
+    proveedores: { nombre: string } | null;
+  };
   const compras = (comprasRes.data ?? []) as unknown as Compra[];
   const porProveedor = ordenar(
     [...agrupar(compras, (c) => c.proveedores?.nombre ?? "Sin proveedor", (c) => Number(c.total))].map(([etiqueta, valor]) => ({
@@ -346,8 +358,9 @@ export async function construirInforme(
   // Si la tabla de gastos aún no existe (migración 0018 sin ejecutar), el informe sigue sin ellos
   type Gasto = { empresa_id: string; fecha: string; tipo: string; categoria: string; valor: number };
   const gastos = (gastosRes.error ? [] : (gastosRes.data ?? [])) as Gasto[];
-  const cuadre = new Map<string, { recibido: number; compras: number; gastos: number; inversiones: number }>();
-  for (let d = periodo.desde; d <= periodo.hasta; d = sumarDias(d, 1)) cuadre.set(d, { recibido: 0, compras: 0, gastos: 0, inversiones: 0 });
+  const cuadre = new Map<string, { recibido: number; compras: number; gastos: number; inversiones: number; inversionInicial: number }>();
+  for (let d = periodo.desde; d <= periodo.hasta; d = sumarDias(d, 1))
+    cuadre.set(d, { recibido: 0, compras: 0, gastos: 0, inversiones: 0, inversionInicial: 0 });
   for (const g of gastos) {
     const dia = cuadre.get(g.fecha);
     if (!dia) continue;
@@ -366,7 +379,10 @@ export async function construirInforme(
   }
   for (const c of compras) {
     const dia = cuadre.get(c.fecha);
-    if (dia) dia.compras += Number(c.total);
+    if (!dia) continue;
+    // La inversión inicial va aparte: no se resta de lo que entró por ventas
+    if (c.es_inversion) dia.inversionInicial += Number(c.total);
+    else dia.compras += Number(c.total);
   }
   const recibidoPorForma = [...new Set(pagos.map((x) => x.forma_pago))]
     .map((forma) => {
@@ -384,7 +400,8 @@ export async function construirInforme(
     const prods = productos.filter((x) => incluir(x.empresa_id));
     const enStock = prods.filter((x) => Number(x.stock) > 0);
     const cart = cartera.filter((x) => incluir(x.empresa_id));
-    const comp = compras.filter((x) => incluir(x.empresa_id));
+    const comp = compras.filter((x) => incluir(x.empresa_id) && !x.es_inversion);
+    const compInv = compras.filter((x) => incluir(x.empresa_id) && x.es_inversion);
     const gas = gastos.filter((x) => incluir(x.empresa_id));
     const totalGastos = suma(gas.filter((x) => x.tipo !== "inversion"), (x) => Number(x.valor));
     return {
@@ -398,6 +415,8 @@ export async function construirInforme(
       recaudo: suma(pagos.filter((x) => incluir(x.empresa_id)), (x) => Number(x.valor)),
       compras: suma(comp, (x) => Number(x.total)),
       numeroCompras: comp.length,
+      comprasInversion: suma(compInv, (x) => Number(x.total)),
+      numeroComprasInversion: compInv.length,
       gastos: totalGastos,
       inversiones: suma(gas.filter((x) => x.tipo === "inversion"), (x) => Number(x.valor)),
       utilidadNeta: util - totalGastos,
@@ -433,6 +452,7 @@ export async function construirInforme(
         numero: c.numero_factura,
         total: Number(c.total),
         empresa: nombreEmpresa.get(c.empresa_id) ?? "",
+        esInversion: c.es_inversion,
       })),
     porFormaPago: filas(
       agrupar(ventas.filter((v) => v.tipo === "contado"), (v) => v.forma_pago, (v) => Number(v.total)),

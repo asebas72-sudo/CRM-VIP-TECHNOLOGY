@@ -11,6 +11,7 @@ type Compra = {
   origen: string;
   fecha: string;
   total: number;
+  es_inversion: boolean;
   proveedores: { nombre: string } | null;
   compra_items: {
     id: string;
@@ -29,7 +30,7 @@ export default async function PaginaCompras() {
   const { data, error } = await supabase
     .from("compras")
     .select(
-      "id, numero_factura, cufe, fecha, total, origen, proveedores (nombre)," +
+      "id, numero_factura, cufe, fecha, total, origen, es_inversion, proveedores (nombre)," +
         " compra_items (id, descripcion, cantidad, costo_unitario, total, productos (codigo, nombre))",
     )
     .eq("empresa_id", activa.id)
@@ -87,6 +88,9 @@ export default async function PaginaCompras() {
                   <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
                     {c.origen === "xml" ? "XML" : c.origen === "foto" ? "Foto" : "Manual"}
                   </span>
+                  {c.es_inversion && (
+                    <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800">Inversión</span>
+                  )}
                   <span className="min-w-40 flex-1 text-slate-700">{c.proveedores?.nombre}</span>
                   <span className="text-sm text-slate-500">
                     {c.compra_items.length} líneas · {cantidad(unidades)} und.

@@ -9,6 +9,7 @@ export type CambiosCompra = {
   proveedor_id: string;
   numero_factura: string;
   fecha: string;
+  es_inversion: boolean;
   items: { id: string; cantidad: number; costo_unitario: number; iva_porcentaje: number; quitar: boolean }[];
 };
 
@@ -38,6 +39,17 @@ export async function editarCompra(compraId: string, cambios: CambiosCompra): Pr
     return { error: error.message };
   }
 
+  const { error: errorInversion } = await supabase.rpc("editar_compra_inversion", {
+    p_compra: compraId,
+    p_es_inversion: cambios.es_inversion,
+  });
+  if (errorInversion) {
+    if (errorInversion.code === "PGRST202")
+      return { error: "Los demás cambios se guardaron, pero falta ejecutar la migración 0020_compras_inversion.sql para marcar inversión." };
+    return { error: errorInversion.message };
+  }
+
+  revalidatePath("/informes");
   revalidatePath("/compras");
   revalidatePath(`/compras/${compraId}`);
   revalidatePath("/productos");
