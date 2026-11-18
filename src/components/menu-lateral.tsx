@@ -79,6 +79,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
         hijos: [
           { href: "/servicio/configuracion", texto: "Servicio técnico", icono: SlidersHorizontal, roles: ["admin"] },
           { href: "/servicio/configuracion/mensajes", texto: "Mensajes de WhatsApp", icono: MessageCircle, roles: ["admin"] },
+          { href: "/servicio/configuracion/tecnicos", texto: "Técnicos", icono: Wrench, roles: TODOS, soloAccesoTotal: true },
           { href: "/servicio/configuracion/usuarios", texto: "Usuarios", icono: Users, roles: TODOS, soloAccesoTotal: true },
           { href: "/servicio/configuracion/empresas", texto: "Empresas", icono: Building2, roles: TODOS, soloAccesoTotal: true },
         ],
