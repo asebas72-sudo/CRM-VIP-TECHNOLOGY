@@ -10,7 +10,8 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/salud
-    autoDeployTrigger: commit
+    # Se publica a mano (Manual Deploy) para cuidar los minutos de compilacion
+    autoDeployTrigger: off
     envVars:
       - key: NODE_VERSION
         value: "22"
