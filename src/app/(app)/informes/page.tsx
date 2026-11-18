@@ -148,7 +148,7 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
         />
       </div>
 
-      <CuadreCaja informe={informe} />
+      <CuadreCaja informe={informe} cartera={k.cartera} />
 
       <VentasPorFormaPago filas={informe.recibidoPorForma} />
 
@@ -360,7 +360,7 @@ const fechaCorta = (dia: string) =>
   new Date(`${dia}T12:00:00Z`).toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
 
 /** Cruce de caja: lo que entró por ventas contra lo que se gastó en compras. */
-function CuadreCaja({ informe }: { informe: Informe }) {
+function CuadreCaja({ informe, cartera }: { informe: Informe; cartera: number }) {
   const recibido = informe.cuadre.reduce((s, d) => s + d.recibido, 0);
   const compras = informe.cuadre.reduce((s, d) => s + d.compras, 0);
   const gastos = informe.cuadre.reduce((s, d) => s + d.gastos, 0);
@@ -375,7 +375,8 @@ function CuadreCaja({ informe }: { informe: Informe }) {
       <h3 className="font-semibold text-slate-900">Cuadre: lo que entró contra lo que salió</h3>
       <p className="text-xs text-slate-500">
         Entró = dinero recibido por ventas de contado y abonos. Salió = compras de mercancía + gastos + inversiones del periodo.
-        Las compras marcadas como inversión inicial van aparte.
+        Las compras marcadas como inversión inicial van aparte. «Por cobrar» es lo que aún deben de las ventas a crédito y
+        separados: no está en «Entró» hasta que lo paguen.
       </p>
 
       {inversionInicial > 0 && (
@@ -386,7 +387,7 @@ function CuadreCaja({ informe }: { informe: Informe }) {
         </div>
       )}
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
         <div className="rounded-xl bg-green-50 p-4 ring-1 ring-green-200">
           <p className="text-sm text-green-800">Entró por ventas</p>
           <p className="text-2xl font-bold text-green-900 tabular-nums">{pesos(recibido)}</p>
@@ -402,6 +403,13 @@ function CuadreCaja({ informe }: { informe: Informe }) {
         <div className="rounded-xl bg-violet-50 p-4 ring-1 ring-violet-200">
           <p className="text-sm text-violet-800">Inversiones</p>
           <p className="text-2xl font-bold text-violet-900 tabular-nums">{pesos(inversiones)}</p>
+        </div>
+        <div className="rounded-xl bg-sky-50 p-4 ring-1 ring-sky-200">
+          <p className="text-sm text-sky-800">Por cobrar (crédito y separados)</p>
+          <p className="text-2xl font-bold text-sky-900 tabular-nums">{pesos(informe.porCobrar.pendiente)}</p>
+          <p className="text-xs text-sky-700">
+            {informe.porCobrar.ventas} venta(s) del periodo por {pesos(informe.porCobrar.valor)} · cartera total {pesos(cartera)}
+          </p>
         </div>
         <div className={`rounded-xl p-4 ring-1 ${diferencia >= 0 ? "bg-slate-900 ring-slate-900" : "bg-amber-50 ring-amber-300"}`}>
           <p className={`text-sm ${diferencia >= 0 ? "text-slate-300" : "text-amber-800"}`}>Quedó (entró − salió)</p>

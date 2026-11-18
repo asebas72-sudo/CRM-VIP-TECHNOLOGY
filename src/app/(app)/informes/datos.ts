@@ -69,6 +69,7 @@ type Venta = {
   forma_pago: string;
   subtotal: number;
   total: number;
+  saldo: number;
   vendedor_id: string | null;
   venta_items: { producto_id: string; descripcion: string; cantidad: number; total: number; iva_porcentaje: number; costo_unitario: number }[];
 };
@@ -115,6 +116,8 @@ export type Informe = {
   recibidoPorForma: { forma: string; valor: number; pagos: number }[];
   /** Cruce día a día: lo que entró por ventas contra lo que salió en compras */
   cuadre: { dia: string; recibido: number; compras: number; gastos: number; inversiones: number; inversionInicial: number }[];
+  /** Crédito y separados vendidos en el periodo: lo que aún deben de esas ventas */
+  porCobrar: { ventas: number; valor: number; pendiente: number };
   /** Gastos e inversiones por categoría */
   porCategoriaGasto: (Fila & { tipo: string })[];
   comprasDetalle: { id: string; fecha: string; proveedor: string; numero: string; total: number; empresa: string; esInversion: boolean }[];
@@ -161,7 +164,7 @@ export async function construirInforme(
     supabase
       .from("ventas")
       .select(
-        "id, empresa_id, fecha, tipo, forma_pago, subtotal, total, vendedor_id," +
+        "id, empresa_id, fecha, tipo, forma_pago, subtotal, total, saldo, vendedor_id," +
           " venta_items (producto_id, descripcion, cantidad, total, iva_porcentaje, costo_unitario)",
       )
       .in("empresa_id", ids)
@@ -442,6 +445,14 @@ export async function construirInforme(
     recibidoPorForma,
     porCategoriaGasto,
     cuadre: [...cuadre].map(([dia, d]) => ({ dia, ...d })),
+    porCobrar: (() => {
+      const credito = ventas.filter((v) => v.tipo !== "contado");
+      return {
+        ventas: credito.length,
+        valor: credito.reduce((s, v) => s + Number(v.total), 0),
+        pendiente: credito.reduce((s, v) => s + Number(v.saldo ?? 0), 0),
+      };
+    })(),
     comprasDetalle: [...compras]
       .sort((a, b) => b.fecha.localeCompare(a.fecha))
       .slice(0, 100)
