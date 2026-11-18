@@ -11,9 +11,11 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
   const texto = (v: string | string[] | undefined) => (typeof v === "string" ? v : undefined);
 
   const periodo = resolverPeriodo(texto(p.p), texto(p.desde), texto(p.hasta));
-  // Siempre consolidado: todas las empresas que administra, discriminado por empresa
-  const empresas = todas.filter((e) => e.rol === "admin").map((e) => ({ id: e.id, nombre: e.nombre }));
-  if (empresas.length === 0) empresas.push({ id: activa.id, nombre: activa.nombre });
+  // Empresas que administra; por defecto el consolidado de todas, o una sola con el filtro
+  const disponibles = todas.filter((e) => e.rol === "admin").map((e) => ({ id: e.id, nombre: e.nombre }));
+  if (disponibles.length === 0) disponibles.push({ id: activa.id, nombre: activa.nombre });
+  const elegida = disponibles.find((e) => e.id === texto(p.e));
+  const empresas = elegida ? [elegida] : disponibles;
   const todasLasEmpresas = empresas.length > 1;
 
   const informe = await construirInforme(empresas, periodo);
@@ -21,7 +23,7 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
 
   const enlace = (cambios: Record<string, string | undefined>) => {
     const q = new URLSearchParams();
-    const base = { p: periodo.clave, desde: periodo.clave === "rango" ? periodo.desde : undefined, hasta: periodo.clave === "rango" ? periodo.hasta : undefined };
+    const base = { e: elegida?.id, p: periodo.clave, desde: periodo.clave === "rango" ? periodo.desde : undefined, hasta: periodo.clave === "rango" ? periodo.hasta : undefined };
     for (const [c, v] of Object.entries({ ...base, ...cambios })) if (v) q.set(c, v);
     return `/informes?${q.toString()}`;
   };
@@ -40,6 +42,21 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
 
       {/* Filtros: una sola fila, arriba de todo */}
       <div className="flex flex-wrap items-center gap-2">
+        {disponibles.length > 1 && (
+          <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-slate-200" aria-label="Empresa">
+            {[{ id: undefined, nombre: "Todas las empresas" }, ...disponibles].map((em) => (
+              <Link
+                key={em.id ?? "todas"}
+                href={enlace({ e: em.id })}
+                className={`rounded-md px-3 py-1.5 text-sm font-medium ${
+                  elegida?.id === em.id ? "bg-blue-700 text-white" : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {em.nombre}
+              </Link>
+            ))}
+          </div>
+        )}
         <div className="flex flex-wrap gap-1 rounded-lg bg-white p-1 ring-1 ring-slate-200">
           {PRESETS.map((pr) => (
             <Link
@@ -55,6 +72,7 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
         </div>
         <form className="flex flex-wrap items-center gap-1 rounded-lg bg-white p-1 text-sm ring-1 ring-slate-200">
           <input type="hidden" name="p" value="rango" />
+          {elegida && <input type="hidden" name="e" value={elegida.id} />}
           <input type="date" name="desde" defaultValue={periodo.desde} aria-label="Desde" className="rounded-md px-2 py-1" />
           <span className="text-slate-400">a</span>
           <input type="date" name="hasta" defaultValue={periodo.hasta} aria-label="Hasta" className="rounded-md px-2 py-1" />

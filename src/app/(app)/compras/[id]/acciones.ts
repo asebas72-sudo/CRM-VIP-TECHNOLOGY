@@ -5,6 +5,45 @@ import { redirect } from "next/navigation";
 import { exigirRol } from "@/lib/empresa";
 import { crearClienteServidor } from "@/lib/supabase/server";
 
+export type CambiosCompra = {
+  proveedor_id: string;
+  numero_factura: string;
+  fecha: string;
+  items: { id: string; cantidad: number; costo_unitario: number; iva_porcentaje: number; quitar: boolean }[];
+};
+
+/** Corrige una compra ya cargada (solo superadmin). Ajusta stock, kardex y costos. */
+export async function editarCompra(compraId: string, cambios: CambiosCompra): Promise<{ error?: string }> {
+  const { activa, perfil } = await exigirRol("admin");
+  if (!perfil.acceso_total) return { error: "Solo un superadmin puede modificar compras." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(cambios.fecha)) return { error: "Fecha inválida." };
+
+  const supabase = await crearClienteServidor();
+  const { data: compra } = await supabase
+    .from("compras")
+    .select("id")
+    .eq("empresa_id", activa.id)
+    .eq("id", compraId)
+    .maybeSingle();
+  if (!compra) return { error: "La compra no existe en esta empresa." };
+
+  const { error } = await supabase.rpc("editar_compra", {
+    p_compra: compraId,
+    p_cabecera: { proveedor_id: cambios.proveedor_id, numero_factura: cambios.numero_factura, fecha: cambios.fecha },
+    p_items: cambios.items,
+  });
+  if (error) {
+    if (error.code === "PGRST202")
+      return { error: "Falta ejecutar la migración 0019_editar_compra.sql en Supabase." };
+    return { error: error.message };
+  }
+
+  revalidatePath("/compras");
+  revalidatePath(`/compras/${compraId}`);
+  revalidatePath("/productos");
+  redirect(`/compras/${compraId}`);
+}
+
 /** Elimina una compra importada por error y revierte su efecto en el inventario. */
 export async function eliminarCompra(compraId: string): Promise<{ error?: string }> {
   const { activa } = await exigirRol("admin");

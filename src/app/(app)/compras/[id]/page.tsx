@@ -20,7 +20,7 @@ type Item = {
 
 export default async function DetalleCompra({ params }: PageProps<"/compras/[id]">) {
   const { id } = await params;
-  const { activa } = await exigirRol("admin", "bodega");
+  const { activa, perfil } = await exigirRol("admin", "bodega");
   const supabase = await crearClienteServidor();
 
   const { data: compra } = await supabase
@@ -78,7 +78,17 @@ export default async function DetalleCompra({ params }: PageProps<"/compras/[id]
               Cargada a <strong className="text-slate-700">{activa.nombre}</strong>
             </p>
           </div>
-          {activa.rol === "admin" && <EliminarCompra compraId={id} numero={c.numero_factura} empresa={activa.nombre} />}
+          <div className="flex flex-wrap gap-2">
+            {perfil.acceso_total && (
+              <Link
+                href={`/compras/${id}/editar`}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Editar compra
+              </Link>
+            )}
+            {activa.rol === "admin" && <EliminarCompra compraId={id} numero={c.numero_factura} empresa={activa.nombre} />}
+          </div>
         </div>
         <div className="mt-2 flex flex-wrap gap-3">
           <Link href={`/etiquetas?compra=${id}`} className="text-sm font-medium text-blue-700 hover:underline">
