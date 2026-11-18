@@ -9,10 +9,23 @@ export function pesos(valor: number | string | null | undefined): string {
   return pesosCOP.format(Number(valor ?? 0));
 }
 
+/** Hora de Colombia: el servidor (Render) corre en UTC, 5 horas adelante. */
+export const ZONA_COLOMBIA = "America/Bogota";
+
 /** 31/10/2026 */
 export function fecha(valor: string | Date): string {
   const d = typeof valor === "string" && /^\d{4}-\d{2}-\d{2}$/.test(valor) ? new Date(`${valor}T12:00:00`) : new Date(valor);
-  return d.toLocaleDateString("es-CO", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return d.toLocaleDateString("es-CO", { timeZone: ZONA_COLOMBIA, day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** 31/10/2026, 3:45 p. m. (hora de Colombia) */
+export function fechaHora(valor: string | Date): string {
+  return new Date(valor).toLocaleString("es-CO", { timeZone: ZONA_COLOMBIA });
+}
+
+/** 03:45 p. m. (hora de Colombia) */
+export function hora(valor: string | Date): string {
+  return new Date(valor).toLocaleTimeString("es-CO", { timeZone: ZONA_COLOMBIA, hour: "2-digit", minute: "2-digit" });
 }
 
 export function cantidad(valor: number | string): string {

@@ -117,7 +117,7 @@ export default async function HistorialVentas({ searchParams }: PageProps<"/vent
                     #{v.consecutivo}
                   </Link>
                 </td>
-                <td className="px-4 py-2">{new Date(v.fecha).toLocaleString("es-CO")}</td>
+                <td className="px-4 py-2">{new Date(v.fecha).toLocaleString("es-CO", { timeZone: "America/Bogota" })}</td>
                 <td className="px-4 py-2">{v.clientes?.nombre ?? "—"}</td>
                 <td className="px-4 py-2">
                   {v.tipo === "contado" ? (FORMA[v.forma_pago] ?? v.forma_pago) : v.tipo === "credito" ? "Crédito" : "Separado"}

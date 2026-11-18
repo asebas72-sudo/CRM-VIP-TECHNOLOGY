@@ -101,7 +101,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
             )}
           </h1>
           <p className="text-sm text-slate-500">
-            {TIPO[v.tipo]} · {new Date(v.fecha).toLocaleString("es-CO")}
+            {TIPO[v.tipo]} · {new Date(v.fecha).toLocaleString("es-CO", { timeZone: "America/Bogota" })}
             {v.clientes && ` · ${v.clientes.nombre}`}
           </p>
           {v.tipo !== "contado" && vigente && (
@@ -109,7 +109,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
               <span className="text-sm">
                 Abonado <strong className="text-green-700">{pesos(v.abonado)}</strong> · Saldo{" "}
                 <strong className={v.saldo > 0 ? "text-red-600" : "text-green-700"}>{pesos(v.saldo)}</strong>
-                {v.fecha_vencimiento && ` · vence ${new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO")}`}
+                {v.fecha_vencimiento && ` · vence ${new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}`}
               </span>
               {v.saldo > 0 && (
                 <BotonAbonar
@@ -148,7 +148,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
         <p>
           Venta No. {v.consecutivo} · {TIPO[v.tipo]}
         </p>
-        <p>{new Date(v.fecha).toLocaleString("es-CO")}</p>
+        <p>{new Date(v.fecha).toLocaleString("es-CO", { timeZone: "America/Bogota" })}</p>
         {vendedor?.nombre && <p>Atendió: {vendedor.nombre}</p>}
         {v.clientes && (
           <p>
@@ -193,7 +193,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
             {pagos.map((pg) => (
               <Fila
                 key={pg.id}
-                texto={`${new Date(pg.fecha).toLocaleDateString("es-CO")} ${FORMA[pg.forma_pago] ?? pg.forma_pago}`}
+                texto={`${new Date(pg.fecha).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })} ${FORMA[pg.forma_pago] ?? pg.forma_pago}`}
                 valor={pesos(pg.valor)}
               />
             ))}
@@ -203,7 +203,7 @@ export default async function DetalleVenta({ params, searchParams }: PageProps<"
               <span>{pesos(v.saldo)}</span>
             </div>
             {v.fecha_vencimiento && v.saldo > 0 && (
-              <p>Pagar antes de: {new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO")}</p>
+              <p>Pagar antes de: {new Date(`${v.fecha_vencimiento}T12:00`).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}</p>
             )}
             {v.tipo === "separado" && (
               <p>{v.entregada ? "Producto entregado" : "Producto separado: se entrega al completar el pago"}</p>

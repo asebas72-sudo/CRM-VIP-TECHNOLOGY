@@ -174,7 +174,7 @@ export function TarjetasInicio({
                   </Link>
                 </td>
                 <td className={`${td} text-slate-600`}>
-                  {new Date(v.fecha).toLocaleTimeString("es-CO", { hour: "2-digit", minute: "2-digit" })}
+                  {new Date(v.fecha).toLocaleTimeString("es-CO", { timeZone: "America/Bogota", hour: "2-digit", minute: "2-digit" })}
                 </td>
                 <td className={td}>{v.cliente}</td>
                 <td className={td}>

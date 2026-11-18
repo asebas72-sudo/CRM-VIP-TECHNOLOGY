@@ -65,7 +65,7 @@ export default async function PaginaEmpresas() {
                 </td>
                 <td className="px-4 py-3 text-slate-600">{usuariosPorEmpresa.get(e.id) ?? 0}</td>
                 <td className="px-4 py-3 text-slate-600">
-                  {new Date(e.creado_en).toLocaleDateString("es-CO")}
+                  {new Date(e.creado_en).toLocaleDateString("es-CO", { timeZone: "America/Bogota" })}
                 </td>
               </tr>
             ))}

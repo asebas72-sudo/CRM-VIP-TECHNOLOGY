@@ -15,6 +15,9 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Hora de Colombia en el servidor (por defecto Render usa UTC)
+      - key: TZ
+        value: America/Bogota
       - key: NEXT_PUBLIC_SUPABASE_URL
         sync: false
       - key: NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY

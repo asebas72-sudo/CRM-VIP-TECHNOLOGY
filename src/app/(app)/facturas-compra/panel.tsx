@@ -123,7 +123,7 @@ export function PanelBuzon({
           </h1>
           <span className="text-xs" style={{ color: C.suave }}>
             {ultimaRevision
-              ? `Última revisión del correo: ${new Date(ultimaRevision).toLocaleString("es-CO")} · ${ultimoResultado ?? ""}`
+              ? `Última revisión del correo: ${new Date(ultimaRevision).toLocaleString("es-CO", { timeZone: "America/Bogota" })} · ${ultimoResultado ?? ""}`
               : "Aún no se ha revisado el correo"}
           </span>
         </header>

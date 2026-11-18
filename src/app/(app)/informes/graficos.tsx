@@ -112,7 +112,7 @@ export function VentasPorDia({ dias }: { dias: Dia[] }) {
           className="pointer-events-none absolute top-0 z-10 min-w-40 -translate-x-1/2 rounded-lg bg-white px-3 py-2 text-xs shadow-lg ring-1 ring-slate-200"
           style={{ left: `${(xActivo / ancho) * 100}%` }}
         >
-          <p className="text-slate-500">{new Date(`${d.dia}T12:00:00`).toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short" })}</p>
+          <p className="text-slate-500">{new Date(`${d.dia}T12:00:00`).toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "America/Bogota" })}</p>
           <p className="text-sm font-bold text-slate-900 tabular-nums">{pesos(d.ventas)}</p>
           <p className="text-slate-500">
             {d.numero} venta(s) · utilidad <span className="font-semibold text-slate-700 tabular-nums">{pesos(d.utilidad)}</span>

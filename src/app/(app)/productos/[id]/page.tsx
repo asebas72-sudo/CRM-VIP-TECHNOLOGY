@@ -124,7 +124,7 @@ export default async function DetalleProducto({ params }: PageProps<"/productos/
                 const tipo = TIPOS[m.tipo] ?? { texto: m.tipo, signo: 1 };
                 return (
                   <tr key={m.id}>
-                    <td className="px-4 py-2 text-slate-600">{new Date(m.fecha).toLocaleString("es-CO")}</td>
+                    <td className="px-4 py-2 text-slate-600">{new Date(m.fecha).toLocaleString("es-CO", { timeZone: "America/Bogota" })}</td>
                     <td className="px-4 py-2">{tipo.texto}</td>
                     <td className="px-4 py-2 text-slate-600">
                       {m.compras ? (
