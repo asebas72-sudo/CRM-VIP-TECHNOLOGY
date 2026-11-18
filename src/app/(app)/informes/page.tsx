@@ -150,7 +150,7 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
 
       <CuadreCaja informe={informe} cartera={k.cartera} />
 
-      <VentasPorFormaPago filas={informe.recibidoPorForma} />
+      <VentasPorFormaPago filas={informe.recibidoPorForma} porCobrar={informe.porCobrar} />
 
       {todasLasEmpresas && <ResumenPorEmpresa filas={informe.porEmpresaKpi} total={k} />}
 
@@ -502,32 +502,45 @@ function CuadreCaja({ informe, cartera }: { informe: Informe; cartera: number })
 }
 
 /** Dinero recibido discriminado por forma de pago. */
-function VentasPorFormaPago({ filas }: { filas: Informe["recibidoPorForma"] }) {
-  const total = filas.reduce((s, f) => s + f.valor, 0);
+function VentasPorFormaPago({ filas, porCobrar }: { filas: Informe["recibidoPorForma"]; porCobrar: Informe["porCobrar"] }) {
+  const recibido = filas.reduce((s, f) => s + f.valor, 0);
+  const total = recibido + porCobrar.pendiente;
   const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+  const tarjetas = [
+    ...filas.map((f) => ({ forma: f.forma, valor: f.valor, detalle: `${f.pagos} pago(s)`, credito: false })),
+    ...(porCobrar.pendiente > 0
+      ? [{ forma: "Crédito (por cobrar)", valor: porCobrar.pendiente, detalle: `${porCobrar.ventas} venta(s) a crédito o separado`, credito: true }]
+      : []),
+  ];
   return (
     <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
       <h3 className="font-semibold text-slate-900">Ventas por forma de pago</h3>
       <p className="text-xs text-slate-500">
-        Dinero recibido en el periodo (contado y abonos de crédito o separado), según cómo pagó el cliente.
+        Dinero recibido en el periodo (contado y abonos de crédito o separado), según cómo pagó el cliente, más lo que quedó
+        a crédito y aún no han pagado.
       </p>
-      {filas.length === 0 ? (
-        <p className="mt-3 text-sm text-slate-500">No hubo pagos en el periodo.</p>
+      {tarjetas.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">No hubo ventas ni pagos en el periodo.</p>
       ) : (
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {filas.map((f) => (
-            <div key={f.forma} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
-              <p className="text-sm font-medium text-slate-600">{f.forma}</p>
-              <p className="text-xl font-bold text-slate-900 tabular-nums">{pesos(f.valor)}</p>
+          {tarjetas.map((f) => (
+            <div key={f.forma} className={`rounded-xl p-4 ring-1 ${f.credito ? "bg-sky-50 ring-sky-200" : "bg-slate-50 ring-slate-200"}`}>
+              <p className={`text-sm font-medium ${f.credito ? "text-sky-800" : "text-slate-600"}`}>{f.forma}</p>
+              <p className={`text-xl font-bold tabular-nums ${f.credito ? "text-sky-900" : "text-slate-900"}`}>{pesos(f.valor)}</p>
               <p className="text-xs text-slate-500">
-                {f.pagos} pago(s) · {pct(f.valor).toFixed(1)}%
+                {f.detalle} · {pct(f.valor).toFixed(1)}%
               </p>
               <div className="mt-2 h-1.5 rounded-full bg-slate-200">
-                <div className="h-1.5 rounded-full bg-blue-600" style={{ width: `${pct(f.valor)}%` }} />
+                <div className={`h-1.5 rounded-full ${f.credito ? "bg-sky-500" : "bg-blue-600"}`} style={{ width: `${pct(f.valor)}%` }} />
               </div>
             </div>
           ))}
         </div>
+      )}
+      {porCobrar.pendiente > 0 && (
+        <p className="mt-3 text-xs text-slate-500">
+          Recibido {pesos(recibido)} + por cobrar {pesos(porCobrar.pendiente)} = {pesos(total)}
+        </p>
       )}
     </section>
   );
