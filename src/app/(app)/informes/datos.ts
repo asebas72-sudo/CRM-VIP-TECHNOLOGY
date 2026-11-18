@@ -1,4 +1,5 @@
 import "server-only";
+import { nombreCategoria } from "@/app/(app)/gastos/opciones";
 import { crearClienteServidor } from "@/lib/supabase/server";
 
 const ZONA = "America/Bogota";
@@ -90,6 +91,10 @@ export type Informe = {
     recaudo: number;
     compras: number;
     numeroCompras: number;
+    gastos: number;
+    inversiones: number;
+    /** Utilidad bruta menos gastos (las inversiones no restan) */
+    utilidadNeta: number;
     inventarioCosto: number;
     inventarioVenta: number;
     unidadesStock: number;
@@ -102,6 +107,13 @@ export type Informe = {
   porEmpresaKpi: (Kpi & { empresaId: string; nombre: string })[];
   porTipo: Fila[];
   porFormaPago: Fila[];
+  /** Dinero recibido (contado + abonos) por forma de pago */
+  recibidoPorForma: { forma: string; valor: number; pagos: number }[];
+  /** Cruce día a día: lo que entró por ventas contra lo que salió en compras */
+  cuadre: { dia: string; recibido: number; compras: number; gastos: number; inversiones: number }[];
+  /** Gastos e inversiones por categoría */
+  porCategoriaGasto: (Fila & { tipo: string })[];
+  comprasDetalle: { id: string; fecha: string; proveedor: string; numero: string; total: number; empresa: string }[];
   topProductos: Fila[];
   porEmpresa: Fila[];
   porVendedor: Fila[];
@@ -141,7 +153,7 @@ export async function construirInforme(
   const anteriorHasta = sumarDias(periodo.desde, -1);
   const anteriorDesde = sumarDias(anteriorHasta, -(largo - 1));
 
-  const [ventasRes, anteriorRes, pagosRes, comprasRes, productosRes, carteraRes] = await Promise.all([
+  const [ventasRes, anteriorRes, pagosRes, comprasRes, productosRes, carteraRes, gastosRes] = await Promise.all([
     supabase
       .from("ventas")
       .select(
@@ -163,7 +175,7 @@ export async function construirInforme(
       .limit(10000),
     supabase
       .from("pagos")
-      .select("empresa_id, valor, ventas!inner (estado)")
+      .select("empresa_id, valor, forma_pago, fecha, ventas!inner (estado)")
       .in("empresa_id", ids)
       .eq("ventas.estado", "pagada")
       .gte("fecha", inicio(periodo.desde))
@@ -171,7 +183,7 @@ export async function construirInforme(
       .limit(20000),
     supabase
       .from("compras")
-      .select("empresa_id, total, proveedores (nombre)")
+      .select("id, empresa_id, fecha, numero_factura, total, proveedores (nombre)")
       .in("empresa_id", ids)
       .gte("fecha", periodo.desde)
       .lte("fecha", periodo.hasta)
@@ -190,6 +202,13 @@ export async function construirInforme(
       .eq("estado", "pagada")
       .gt("saldo", 0)
       .limit(5000),
+    supabase
+      .from("gastos")
+      .select("empresa_id, fecha, tipo, categoria, valor")
+      .in("empresa_id", ids)
+      .gte("fecha", periodo.desde)
+      .lte("fecha", periodo.hasta)
+      .limit(20000),
   ]);
 
   for (const r of [ventasRes, anteriorRes, pagosRes, comprasRes, productosRes, carteraRes]) {
@@ -304,7 +323,7 @@ export async function construirInforme(
   ).slice(0, 10);
 
   // --- Compras ---
-  type Compra = { empresa_id: string; total: number; proveedores: { nombre: string } | null };
+  type Compra = { id: string; empresa_id: string; fecha: string; numero_factura: string; total: number; proveedores: { nombre: string } | null };
   const compras = (comprasRes.data ?? []) as unknown as Compra[];
   const porProveedor = ordenar(
     [...agrupar(compras, (c) => c.proveedores?.nombre ?? "Sin proveedor", (c) => Number(c.total))].map(([etiqueta, valor]) => ({
@@ -321,7 +340,40 @@ export async function construirInforme(
   const nombreVendedor = new Map((perfiles ?? []).map((p) => [p.usuario_id, p.nombre ?? p.correo]));
 
   const anterior = (anteriorRes.data ?? []) as { empresa_id: string; total: number }[];
-  const pagos = (pagosRes.data ?? []) as unknown as { empresa_id: string; valor: number }[];
+  const pagos = (pagosRes.data ?? []) as unknown as { empresa_id: string; valor: number; forma_pago: string; fecha: string }[];
+
+  // --- Cruce: entradas (pagos recibidos) contra salidas (compras) ---
+  // Si la tabla de gastos aún no existe (migración 0018 sin ejecutar), el informe sigue sin ellos
+  type Gasto = { empresa_id: string; fecha: string; tipo: string; categoria: string; valor: number };
+  const gastos = (gastosRes.error ? [] : (gastosRes.data ?? [])) as Gasto[];
+  const cuadre = new Map<string, { recibido: number; compras: number; gastos: number; inversiones: number }>();
+  for (let d = periodo.desde; d <= periodo.hasta; d = sumarDias(d, 1)) cuadre.set(d, { recibido: 0, compras: 0, gastos: 0, inversiones: 0 });
+  for (const g of gastos) {
+    const dia = cuadre.get(g.fecha);
+    if (!dia) continue;
+    if (g.tipo === "inversion") dia.inversiones += Number(g.valor);
+    else dia.gastos += Number(g.valor);
+  }
+  const porCategoriaGasto = [...agrupar(gastos, (g) => `${g.tipo}|${g.categoria}`, (g) => Number(g.valor))]
+    .map(([clave, valor]) => {
+      const [tipo, categoria] = clave.split("|");
+      return { tipo, etiqueta: nombreCategoria(tipo, categoria), valor, detalle: tipo === "inversion" ? "Inversión" : "Gasto" };
+    })
+    .sort((a, b) => b.valor - a.valor);
+  for (const x of pagos) {
+    const dia = cuadre.get(diaColombia(x.fecha));
+    if (dia) dia.recibido += Number(x.valor);
+  }
+  for (const c of compras) {
+    const dia = cuadre.get(c.fecha);
+    if (dia) dia.compras += Number(c.total);
+  }
+  const recibidoPorForma = [...new Set(pagos.map((x) => x.forma_pago))]
+    .map((forma) => {
+      const de = pagos.filter((x) => x.forma_pago === forma);
+      return { forma: FORMA[forma] ?? forma, valor: de.reduce((s, x) => s + Number(x.valor), 0), pagos: de.length };
+    })
+    .sort((a, b) => b.valor - a.valor);
   const suma = <T,>(lista: T[], valor: (x: T) => number) => lista.reduce((t, x) => t + valor(x), 0);
 
   function kpiDe(incluir: (empresaId: string) => boolean): Kpi {
@@ -333,6 +385,8 @@ export async function construirInforme(
     const enStock = prods.filter((x) => Number(x.stock) > 0);
     const cart = cartera.filter((x) => incluir(x.empresa_id));
     const comp = compras.filter((x) => incluir(x.empresa_id));
+    const gas = gastos.filter((x) => incluir(x.empresa_id));
+    const totalGastos = suma(gas.filter((x) => x.tipo !== "inversion"), (x) => Number(x.valor));
     return {
       ventas: total,
       ventasAnterior: suma(anterior.filter((x) => incluir(x.empresa_id)), (x) => Number(x.total)),
@@ -344,6 +398,9 @@ export async function construirInforme(
       recaudo: suma(pagos.filter((x) => incluir(x.empresa_id)), (x) => Number(x.valor)),
       compras: suma(comp, (x) => Number(x.total)),
       numeroCompras: comp.length,
+      gastos: totalGastos,
+      inversiones: suma(gas.filter((x) => x.tipo === "inversion"), (x) => Number(x.valor)),
+      utilidadNeta: util - totalGastos,
       inventarioCosto: suma(enStock, (x) => Number(x.stock) * Number(x.costo_promedio)),
       inventarioVenta: suma(enStock, (x) => Number(x.stock) * Number(x.precio_venta)),
       unidadesStock: suma(enStock, (x) => Number(x.stock)),
@@ -363,6 +420,20 @@ export async function construirInforme(
     kpi: kpiDe(() => true),
     porEmpresaKpi: empresas.map((e) => ({ ...kpiDe((id) => id === e.id), empresaId: e.id, nombre: e.nombre })),
     porTipo: filas(agrupar(ventas, (v) => v.tipo, (v) => Number(v.total)), (k) => TIPO[k] ?? k),
+    recibidoPorForma,
+    porCategoriaGasto,
+    cuadre: [...cuadre].map(([dia, d]) => ({ dia, ...d })),
+    comprasDetalle: [...compras]
+      .sort((a, b) => b.fecha.localeCompare(a.fecha))
+      .slice(0, 100)
+      .map((c) => ({
+        id: c.id,
+        fecha: c.fecha,
+        proveedor: c.proveedores?.nombre ?? "Sin proveedor",
+        numero: c.numero_factura,
+        total: Number(c.total),
+        empresa: nombreEmpresa.get(c.empresa_id) ?? "",
+      })),
     porFormaPago: filas(
       agrupar(ventas.filter((v) => v.tipo === "contado"), (v) => v.forma_pago, (v) => Number(v.total)),
       (k) => FORMA[k] ?? k,

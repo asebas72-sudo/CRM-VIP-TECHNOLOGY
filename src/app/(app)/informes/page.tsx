@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { exigirRol } from "@/lib/empresa";
 import { cantidad, pesos } from "@/lib/formato";
-import { construirInforme, PRESETS, resolverPeriodo, type Kpi } from "./datos";
+import { construirInforme, PRESETS, resolverPeriodo, type Informe, type Kpi } from "./datos";
 import { BarrasHorizontales, TablaDias, VentasPorDia } from "./graficos";
 
 export default async function PaginaInformes({ searchParams }: PageProps<"/informes">) {
@@ -87,9 +87,16 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
           valor={pesos(k.utilidad)}
           detalle={k.margen === null ? "—" : `Margen ${k.margen.toFixed(1)}% sobre ventas sin IVA`}
         />
+        <Indicador
+          titulo="Utilidad neta"
+          valor={pesos(k.utilidadNeta)}
+          detalle={`Utilidad bruta − gastos ${pesos(k.gastos)} (las inversiones no restan)`}
+          enlace="/gastos"
+        />
         <Indicador titulo="Número de ventas" valor={cantidad(k.numeroVentas)} detalle={`Ticket promedio ${pesos(k.ticket)} · ${cantidad(k.unidades)} und.`} />
         <Indicador titulo="Dinero recibido" valor={pesos(k.recaudo)} detalle="Pagos de contado y abonos del periodo" />
         <Indicador titulo="Compras" valor={pesos(k.compras)} detalle={`${k.numeroCompras} factura(s) de proveedores`} />
+        <Indicador titulo="Gastos e inversiones" valor={pesos(k.gastos + k.inversiones)} detalle={`Gastos ${pesos(k.gastos)} · inversiones ${pesos(k.inversiones)}`} enlace="/gastos" />
         <Indicador
           titulo="Inventario al costo"
           valor={pesos(k.inventarioCosto)}
@@ -115,6 +122,10 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
         />
       </div>
 
+      <CuadreCaja informe={informe} />
+
+      <VentasPorFormaPago filas={informe.recibidoPorForma} />
+
       {todasLasEmpresas && <ResumenPorEmpresa filas={informe.porEmpresaKpi} total={k} />}
 
       <Tarjeta titulo="Ventas por día" subtitulo="Pase el mouse sobre una barra para ver el detalle del día">
@@ -130,9 +141,6 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
           <Tarjeta titulo="Ventas por tipo" subtitulo="Contado, crédito y separado">
             <BarrasHorizontales filas={informe.porTipo} />
           </Tarjeta>
-          <Tarjeta titulo="Contado por forma de pago">
-            <BarrasHorizontales filas={informe.porFormaPago} />
-          </Tarjeta>
         </div>
       </div>
 
@@ -144,6 +152,9 @@ export default async function PaginaInformes({ searchParams }: PageProps<"/infor
         )}
         <Tarjeta titulo="Ventas por vendedor">
           <BarrasHorizontales filas={informe.porVendedor} />
+        </Tarjeta>
+        <Tarjeta titulo="Gastos e inversiones por categoría" subtitulo="Registrados en Gastos e inversiones">
+          <BarrasHorizontales filas={informe.porCategoriaGasto} vacio="No hay gastos ni inversiones en el periodo." />
         </Tarjeta>
         <Tarjeta titulo="Compras por proveedor" subtitulo="Top 10 del periodo">
           <BarrasHorizontales filas={informe.porProveedor} vacio="No hay compras en el periodo." />
@@ -249,6 +260,9 @@ function ResumenPorEmpresa({ filas, total }: { filas: (Kpi & { empresaId: string
     { titulo: "Ticket prom.", valor: (k) => pesos(k.ticket) },
     { titulo: "Recibido", valor: (k) => pesos(k.recaudo) },
     { titulo: "Compras", valor: (k) => pesos(k.compras) },
+    { titulo: "Gastos", valor: (k) => pesos(k.gastos) },
+    { titulo: "Inversiones", valor: (k) => pesos(k.inversiones) },
+    { titulo: "Utilidad neta", valor: (k) => pesos(k.utilidadNeta) },
     { titulo: "Inventario al costo", valor: (k) => pesos(k.inventarioCosto) },
     {
       titulo: "Cartera",
@@ -269,7 +283,7 @@ function ResumenPorEmpresa({ filas, total }: { filas: (Kpi & { empresaId: string
         <p className="text-xs text-slate-500">Los mismos indicadores de arriba, empresa por empresa, con el total consolidado.</p>
       </div>
       <div className="mt-3 overflow-x-auto">
-        <table className="w-full min-w-[1100px] text-right text-sm">
+        <table className="w-full min-w-[1400px] text-right text-sm">
           <thead className="border-y border-slate-200 bg-slate-50 text-slate-600">
             <tr>
               <th className="px-4 py-2 text-left font-medium">Empresa</th>
@@ -304,6 +318,157 @@ function ResumenPorEmpresa({ filas, total }: { filas: (Kpi & { empresaId: string
           </tfoot>
         </table>
       </div>
+    </section>
+  );
+}
+
+const fechaCorta = (dia: string) =>
+  new Date(`${dia}T12:00:00Z`).toLocaleDateString("es-CO", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+
+/** Cruce de caja: lo que entró por ventas contra lo que se gastó en compras. */
+function CuadreCaja({ informe }: { informe: Informe }) {
+  const recibido = informe.cuadre.reduce((s, d) => s + d.recibido, 0);
+  const compras = informe.cuadre.reduce((s, d) => s + d.compras, 0);
+  const gastos = informe.cuadre.reduce((s, d) => s + d.gastos, 0);
+  const inversiones = informe.cuadre.reduce((s, d) => s + d.inversiones, 0);
+  const salio = (d: { compras: number; gastos: number; inversiones: number }) => d.compras + d.gastos + d.inversiones;
+  const diferencia = recibido - compras - gastos - inversiones;
+  const dias = informe.cuadre.filter((d) => d.recibido > 0 || salio(d) > 0).reverse();
+
+  return (
+    <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+      <h3 className="font-semibold text-slate-900">Cuadre: lo que entró contra lo que salió</h3>
+      <p className="text-xs text-slate-500">
+        Entró = dinero recibido por ventas de contado y abonos. Salió = compras de mercancía + gastos + inversiones del periodo.
+      </p>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-xl bg-green-50 p-4 ring-1 ring-green-200">
+          <p className="text-sm text-green-800">Entró por ventas</p>
+          <p className="text-2xl font-bold text-green-900 tabular-nums">{pesos(recibido)}</p>
+        </div>
+        <div className="rounded-xl bg-red-50 p-4 ring-1 ring-red-200">
+          <p className="text-sm text-red-800">Compras</p>
+          <p className="text-2xl font-bold text-red-900 tabular-nums">{pesos(compras)}</p>
+        </div>
+        <div className="rounded-xl bg-orange-50 p-4 ring-1 ring-orange-200">
+          <p className="text-sm text-orange-800">Gastos</p>
+          <p className="text-2xl font-bold text-orange-900 tabular-nums">{pesos(gastos)}</p>
+        </div>
+        <div className="rounded-xl bg-violet-50 p-4 ring-1 ring-violet-200">
+          <p className="text-sm text-violet-800">Inversiones</p>
+          <p className="text-2xl font-bold text-violet-900 tabular-nums">{pesos(inversiones)}</p>
+        </div>
+        <div className={`rounded-xl p-4 ring-1 ${diferencia >= 0 ? "bg-slate-900 ring-slate-900" : "bg-amber-50 ring-amber-300"}`}>
+          <p className={`text-sm ${diferencia >= 0 ? "text-slate-300" : "text-amber-800"}`}>Quedó (entró − salió)</p>
+          <p className={`text-2xl font-bold tabular-nums ${diferencia >= 0 ? "text-white" : "text-amber-900"}`}>{pesos(diferencia)}</p>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-6 xl:grid-cols-2">
+        <div>
+          <h4 className="text-sm font-semibold text-slate-700">Día a día</h4>
+          {dias.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">No hubo ventas ni compras en el periodo.</p>
+          ) : (
+            <div className="mt-2 max-h-80 overflow-auto rounded-lg ring-1 ring-slate-200">
+              <table className="w-full text-right text-sm tabular-nums">
+                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Día</th>
+                    <th className="px-3 py-2 font-medium">Entró</th>
+                    <th className="px-3 py-2 font-medium">Compras</th>
+                    <th className="px-3 py-2 font-medium">Gastos</th>
+                    <th className="px-3 py-2 font-medium">Invers.</th>
+                    <th className="px-3 py-2 font-medium">Quedó</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {dias.map((d) => (
+                    <tr key={d.dia}>
+                      <td className="px-3 py-1.5 text-left capitalize text-slate-700">{fechaCorta(d.dia)}</td>
+                      <td className="px-3 py-1.5 text-green-700">{pesos(d.recibido)}</td>
+                      <td className="px-3 py-1.5 text-red-700">{d.compras ? pesos(d.compras) : "—"}</td>
+                      <td className="px-3 py-1.5 text-orange-700">{d.gastos ? pesos(d.gastos) : "—"}</td>
+                      <td className="px-3 py-1.5 text-violet-700">{d.inversiones ? pesos(d.inversiones) : "—"}</td>
+                      <td className={`px-3 py-1.5 font-semibold ${d.recibido - salio(d) < 0 ? "text-amber-700" : "text-slate-900"}`}>
+                        {pesos(d.recibido - salio(d))}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div>
+          <h4 className="text-sm font-semibold text-slate-700">Qué se compró</h4>
+          {informe.comprasDetalle.length === 0 ? (
+            <p className="mt-2 text-sm text-slate-500">No hay compras en el periodo.</p>
+          ) : (
+            <div className="mt-2 max-h-80 overflow-auto rounded-lg ring-1 ring-slate-200">
+              <table className="w-full text-sm">
+                <thead className="sticky top-0 bg-slate-50 text-slate-600">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Fecha</th>
+                    <th className="px-3 py-2 text-left font-medium">Proveedor</th>
+                    <th className="px-3 py-2 text-right font-medium">Total</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {informe.comprasDetalle.map((c) => (
+                    <tr key={c.id} className="hover:bg-slate-50">
+                      <td className="px-3 py-1.5 whitespace-nowrap capitalize text-slate-600">{fechaCorta(c.fecha)}</td>
+                      <td className="px-3 py-1.5">
+                        <Link href={`/compras/${c.id}`} className="font-medium text-slate-900 hover:text-blue-700">
+                          {c.proveedor}
+                        </Link>
+                        <span className="block text-xs text-slate-500">
+                          N.º {c.numero}
+                          {c.empresa && ` · ${c.empresa}`}
+                        </span>
+                      </td>
+                      <td className="px-3 py-1.5 text-right tabular-nums text-red-700">{pesos(c.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** Dinero recibido discriminado por forma de pago. */
+function VentasPorFormaPago({ filas }: { filas: Informe["recibidoPorForma"] }) {
+  const total = filas.reduce((s, f) => s + f.valor, 0);
+  const pct = (v: number) => (total > 0 ? (v / total) * 100 : 0);
+  return (
+    <section className="rounded-2xl bg-white p-5 ring-1 ring-slate-200">
+      <h3 className="font-semibold text-slate-900">Ventas por forma de pago</h3>
+      <p className="text-xs text-slate-500">
+        Dinero recibido en el periodo (contado y abonos de crédito o separado), según cómo pagó el cliente.
+      </p>
+      {filas.length === 0 ? (
+        <p className="mt-3 text-sm text-slate-500">No hubo pagos en el periodo.</p>
+      ) : (
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {filas.map((f) => (
+            <div key={f.forma} className="rounded-xl bg-slate-50 p-4 ring-1 ring-slate-200">
+              <p className="text-sm font-medium text-slate-600">{f.forma}</p>
+              <p className="text-xl font-bold text-slate-900 tabular-nums">{pesos(f.valor)}</p>
+              <p className="text-xs text-slate-500">
+                {f.pagos} pago(s) · {pct(f.valor).toFixed(1)}%
+              </p>
+              <div className="mt-2 h-1.5 rounded-full bg-slate-200">
+                <div className="h-1.5 rounded-full bg-blue-600" style={{ width: `${pct(f.valor)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
