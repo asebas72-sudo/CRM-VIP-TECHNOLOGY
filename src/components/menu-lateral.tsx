@@ -10,9 +10,11 @@ import {
   ChevronRight,
   ClipboardPlus,
   House,
+  Lightbulb,
   MailCheck,
   MessageCircle,
   Package,
+  PiggyBank,
   QrCode,
   Receipt,
   Settings,
@@ -29,6 +31,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import type { Modulo, Rol } from "@/lib/empresa";
+import { PORTAFOLIO_ACTIVO } from "@/lib/funciones";
 
 type Enlace = { href: string; texto: string; icono: LucideIcon; roles: Rol[]; soloAccesoTotal?: boolean };
 type Opcion = Enlace | { texto: string; icono: LucideIcon; hijos: Enlace[] };
@@ -44,11 +47,13 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/cartera", texto: "Cartera y abonos", icono: Wallet, roles: ["admin", "vendedor"] },
       { href: "/productos", texto: "Productos", icono: Package, roles: ["admin", "bodega", "vendedor"] },
       { href: "/compras", texto: "Compras", icono: Truck, roles: ["admin", "bodega"] },
+      { href: "/gastos", texto: "Gastos e inversiones", icono: PiggyBank, roles: ["admin", "bodega", "vendedor"] },
       { href: "/facturas-compra", texto: "Facturas compras", icono: MailCheck, roles: TODOS, soloAccesoTotal: true },
       { href: "/etiquetas", texto: "Etiquetas QR", icono: QrCode, roles: ["admin", "bodega"] },
       { href: "/mis-servicios", texto: "Servicios", icono: BriefcaseBusiness, roles: ["admin"] },
-      { href: "/portafolio", texto: "Portafolio", icono: Store, roles: ["admin"] },
+      ...(PORTAFOLIO_ACTIVO ? [{ href: "/portafolio", texto: "Portafolio", icono: Store, roles: ["admin"] as Rol[] }] : []),
       { href: "/informes", texto: "Informes", icono: BarChart3, roles: ["admin"] },
+      { href: "/mejoras", texto: "Mejoras", icono: Lightbulb, roles: TODOS },
       {
         texto: "Configuración",
         icono: Settings,
@@ -67,6 +72,7 @@ const MENUS: Record<Modulo, { titulo: string; opciones: Opcion[] }> = {
       { href: "/servicio/ingreso", texto: "Nuevo ingreso", icono: ClipboardPlus, roles: ["admin", "vendedor", "tecnico"] },
       { href: "/servicio/asesorias", texto: "Asesorías", icono: CalendarClock, roles: ["admin", "vendedor", "tecnico"] },
       { href: "/servicio/asesorias/nueva", texto: "Nueva asesoría", icono: CalendarPlus, roles: ["admin", "vendedor", "tecnico"] },
+      { href: "/servicio/mejoras", texto: "Mejoras", icono: Lightbulb, roles: TODOS },
       {
         texto: "Configuración",
         icono: Settings,

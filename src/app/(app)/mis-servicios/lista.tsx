@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { botonPrimario, botonSecundario } from "@/components/dialogo";
 import { pesos } from "@/lib/formato";
+import { PORTAFOLIO_ACTIVO } from "@/lib/funciones";
 import { actualizarServicio, cambiarEstadoServicio, crearServicio, type DatosServicio } from "./acciones";
 
 export type Servicio = {
@@ -81,21 +82,27 @@ function Formulario({
           ))}
         </select>
       </label>
-      <label className={`${etiqueta} sm:col-span-3`}>
-        Descripción para el portafolio
+      {PORTAFOLIO_ACTIVO && (
+        <label className={`${etiqueta} sm:col-span-3`}>
+          Descripción para el portafolio
         <textarea
           rows={2}
           value={d.descripcion}
           onChange={(e) => setD({ ...d, descripcion: e.target.value })}
-          className={`${campo} mt-1`}
-        />
-      </label>
+            className={`${campo} mt-1`}
+          />
+        </label>
+      )}
       {children && <div className="sm:col-span-3">{children}</div>}
       <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-3">
+        {PORTAFOLIO_ACTIVO ? (
         <label className="flex items-center gap-2 text-sm text-slate-700">
           <input type="checkbox" checked={d.publicar} onChange={(e) => setD({ ...d, publicar: e.target.checked })} className="size-4" />
           Mostrar en el portafolio
         </label>
+        ) : (
+          <span />
+        )}
         <div className="flex flex-wrap items-center gap-2">
           {resumen && <span className="text-sm text-green-700">{resumen}</span>}
           {error && <span className="text-sm text-red-700">{error}</span>}
@@ -143,7 +150,7 @@ function Fila({ s }: { s: Servicio }) {
         <p className="font-medium text-slate-900">{s.nombre}</p>
         <p className="text-xs text-slate-500">
           <span className="font-mono">{s.codigo}</span> · IVA {Number(s.iva_porcentaje)}%
-          {s.publicar_portafolio && s.activo && " · En portafolio"}
+          {PORTAFOLIO_ACTIVO && s.publicar_portafolio && s.activo && " · En portafolio"}
           {!s.activo && " · Inactivo"}
         </p>
         {error && <p className="text-sm text-red-700">{error}</p>}
