@@ -44,6 +44,13 @@ export function FormularioBusqueda({ children }: { children: ReactNode }) {
       onSubmit={(e) => {
         e.preventDefault();
         aplicar(e.currentTarget);
+        // El lector termina cada código con Enter: el texto queda seleccionado
+        // para que el siguiente código escaneado lo reemplace sin borrar a mano
+        const campo = e.currentTarget.elements.namedItem("q");
+        if (campo instanceof HTMLInputElement) {
+          campo.focus();
+          campo.select();
+        }
       }}
       aria-busy={buscando}
     >
